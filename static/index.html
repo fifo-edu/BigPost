@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>BigPost — Administração</title>
+<style>
+:root{--bg:#f4f6f8;--ink:#17324d;--line:#e5e8eb;--muted:#667684;--accent:#17324d}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.4 Arial,sans-serif;background:var(--bg);color:var(--ink)}
+.hidden{display:none!important}
+.login{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg)}
+.card,.box{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+aside{background:var(--ink);color:#fff;height:100vh;overflow-y:auto;position:sticky;top:0}
+aside h2{padding:20px;font-size:16px}
+nav button{width:100%;padding:12px 18px;text-align:left;border:0;background:transparent;color:#fff;cursor:pointer;font-size:13px}
+nav button:hover{background:#274c6d}
+main{padding:24px;max-width:1200px}
+.page{display:none}
+.page.active{display:block}
+h1{font-size:20px;margin:0 0 16px}
+h3{margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid.g2{grid-template-columns:repeat(2,1fr)}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.metric{background:#fff;padding:18px;border-radius:10px;box-shadow:0 1px 8px rgba(0,0,0,.05)}
+.metric b{display:block;font-size:24px;margin-top:6px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:2px}
+.field label{font-size:12px;color:var(--muted)}
+input,select,textarea{padding:9px;border:1px solid #ccd4dc;border-radius:7px;font:inherit}
+.action{padding:8px 14px;border:0;border-radius:7px;background:var(--ink);color:#fff;cursor:pointer;font-size:13px}
+.action.secondary{background:#fff;color:var(--ink);border:1px solid #ccd4dc}
+.action.danger{background:#a53030}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
+.scroll{overflow:auto}
+.notice{color:var(--muted);font-size:12px}
+.privacy{border-left:4px solid var(--ink);padding-left:12px}
+.section-title{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 6px;border-top:1px solid var(--line);padding-top:14px}
+.section-title:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.badge{padding:2px 8px;border-radius:20px;font-size:11px}
+.badge.ok{background:#e2f5e9;color:#187a3f}
+.badge.warn{background:#fdf0e0;color:#9a5b00}
+.badge.err{background:#fbe4e4;color:#a53030}
+.bbpanel{margin-top:10px}
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <div class="box">
+    <h2>BigPost — Administração</h2>
+    <p class="notice">Cadastro, licenciamento e cobrança das agências licenciadas.</p>
+    <p class="notice">Procurando o portal da agência ou do cliente? <a href="/agencia/">/agencia</a> · <a href="/cliente/">/cliente</a></p>
+    <div class="field"><label>Usuário</label><input id="lu"></div>
+    <div class="field"><label>Senha</label><input id="lp" type="password"></div>
+    <br>
+    <button id="enter" class="action">Entrar</button>
+    <p id="msg" style="color:#a53030"></p>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <aside>
+    <h2>BigPost<br><small style="font-weight:normal;opacity:.7">Administração</small></h2>
+    <nav>
+      <button data-p="dash">Dashboard</button>
+      <button data-p="clientes">Licenciados</button>
+      <button data-p="novo">Cadastrar Licenciado</button>
+      <button data-p="licencas">Licenças</button>
+      <button data-p="agencia" data-minrole="Supervisor">Agência: Usuários &amp; Correios</button>
+      <button data-p="cobrancas">Cobranças</button>
+      <button data-p="banco">Banco</button>
+      <button data-p="parametros" data-minrole="Supervisor">Parâmetros</button>
+      <button data-p="usuarios" data-minrole="Supervisor">Usuários</button>
+      <button data-p="audit" data-minrole="Supervisor">Logs / Auditoria</button>
+    </nav>
+  </aside>
+  <main>
+    <h1 id="title">Dashboard</h1>
+
+    <section id="dash" class="page active">
+      <div class="card privacy">
+        <b>Privacidade / LGPD</b>
+        <p>Este painel administra somente metadados de cadastro, licenciamento e cobrança. Não recebe etiquetas, remetente/destinatário, notas fiscais ou qualquer dado operacional de postagem dos licenciados.</p>
+      </div>
+      <br>
+      <div id="metrics" class="metrics"></div>
+    </section>
+
+    <section id="novo" class="page">
+      <div class="card">
+        <h3>Novo Licenciado</h3>
+
+        <div class="section-title">Identificação</div>
+        <div class="grid g2">
+          <div class="field"><label>Tipo de pessoa</label>
+            <select id="personType"><option value="PJ">Pessoa Jurídica</option><option value="PF">Pessoa Física</option></select>
+          </div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Razão Social / Nome completo *</label><input id="legal"></div>
+          <div class="field"><label>Nome Fantasia</label><input id="trade"></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>CNPJ/CPF *</label><input id="tax"></div>
+          <div class="field"><label>Inscrição Estadual</label><input id="stateReg"></div>
+        </div>
+
+        <div class="section-title">Endereço</div>
+        <div class="grid">
+          <div class="field"><label>CEP</label><input id="zip"></div>
+          <div class="field"><label>Logradouro</label><input id="street"></div>
+          <div class="field"><label>Número</label><input id="number"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Complemento (opcional)</label><input id="complement"></div>
+          <div class="field"><label>Bairro</label><input id="district"></div>
+          <div class="field"><label>Cidade</label><input id="city"></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>UF</label>
+            <select id="state">
+              <option value=""></option>
+              <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option>
+              <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
+              <option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option>
+              <option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option>
+              <option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option>
+              <option>SE</option><option>TO</option>
+            </select>
+          </div>
+          <div class="field"><label>Código IBGE do município (opcional)</label><input id="ibge"></div>
+        </div>
+
+        <div class="section-title">Contato</div>
+        <div class="grid">
+          <div class="field"><label>Pessoa de contato</label><input id="contactName"></div>
+          <div class="field"><label>Cargo</label><input id="contactRole"></div>
+          <div class="field"><label>Telefone de contato</label><input id="contactPhone"></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>E-mail de contato</label><input id="contactEmail"></div>
+          <div class="field"><label>Website (opcional)</label><input id="website"></div>
+        </div>
+
+        <div class="section-title">Financeiro</div>
+        <div class="grid g2">
+          <div class="field"><label>E-mail de cobrança</label><input id="email"></div>
+          <div class="field"><label>Telefone de cobrança</label><input id="phone"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Usuários contratados</label><input id="users" type="number" value="3"></div>
+          <div class="field"><label>Mensalidade (R$)</label><input id="fee" type="number" step=".01"></div>
+          <div class="field"><label>Dia de vencimento</label><input id="billday" type="number" value="10"></div>
+        </div>
+
+        <div class="section-title">Dados Correios (opcional — preencher se já for agência franqueada)</div>
+        <div class="grid g2">
+          <div class="field"><label>MCU (8 dígitos)</label><input id="correiosMcu" maxlength="8" pattern="[0-9]{8}" placeholder="00000000"></div>
+        </div>
+        <p class="notice">Credenciais de acesso ao Correios Atende (usuário/senha do site) são cadastradas depois, na tela "Agência: Usuários &amp; Correios".</p>
+
+        <div class="section-title">Observações</div>
+        <div class="field"><textarea id="notes" rows="3"></textarea></div>
+
+        <br>
+        <button id="saveLicensee" class="action">Cadastrar</button>
+      </div>
+    </section>
+
+    <section id="clientes" class="page">
+      <div class="card scroll">
+        <h3>Licenciados</h3>
+        <table>
+          <thead><tr><th>Empresa</th><th>CNPJ/CPF</th><th>Cidade/UF</th><th>Contato</th><th>Status</th><th>Ação</th></tr></thead>
+          <tbody id="licensees"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="licencas" class="page">
+      <div class="card">
+        <h3>Gerar Licença</h3>
+        <div class="grid">
+          <div class="field"><label>Licenciado</label><select id="licL"></select></div>
+          <div class="field"><label>Validade (vazio = perpétua)</label><input id="licExp" type="date"></div>
+          <div class="field"><label>Máx. usuários</label><input id="licMax" type="number"></div>
+        </div>
+        <br><button id="genLic" class="action">Gerar licença assinada</button>
+        <div class="field" style="margin-top:12px"><textarea id="licCode" rows="6" readonly></textarea></div>
+        <p class="notice">O código gerado é assinado com Ed25519 e pode ser validado offline pelos apps Cliente/Agência via a chave pública em <code>/api/v1/licenses/public-key</code>.</p>
+      </div>
+      <div class="card scroll">
+        <table><thead><tr><th>Licenciado</th><th>UID</th><th>Validade</th><th>Máx. usuários</th><th>Status</th></tr></thead><tbody id="licenses"></tbody></table>
+      </div>
+    </section>
+
+    <section id="agencia" class="page">
+      <div class="card">
+        <h3>Agência: Usuários &amp; Credenciais Correios</h3>
+        <div class="field"><label>Licenciado</label><select id="agLicensee" onchange="loadAgencyDetail()"></select></div>
+      </div>
+
+      <div class="card">
+        <h3>Credencial Correios Atende</h3>
+        <p class="notice">O site pede o MCU (8 dígitos) e, na tela seguinte, usuário e senha. A senha fica criptografada — nunca é exibida de volta aqui.</p>
+        <div id="agCredStatus" class="notice"></div>
+        <div class="grid g2">
+          <div class="field"><label>MCU (8 dígitos)</label><input id="agMcu" maxlength="8" pattern="[0-9]{8}"></div>
+          <div class="field"><label>Usuário Correios Atende</label><input id="agCorreiosUser"></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Senha</label><input id="agCorreiosPass" type="password"></div>
+          <div class="field"><label>Token de API (se houver)</label><input id="agCorreiosToken"></div>
+        </div>
+        <br><button id="saveCorreiosCred" class="action">Salvar credencial</button>
+      </div>
+
+      <div class="card">
+        <h3>Novo usuário da agência</h3>
+        <div class="grid">
+          <div class="field"><label>Usuário</label><input id="agUserUsername"></div>
+          <div class="field"><label>Nome completo</label><input id="agUserFullName"></div>
+          <div class="field"><label>Senha</label><input id="agUserPassword" type="password"></div>
+        </div>
+        <div class="field"><label>Perfil</label>
+          <select id="agUserRole">
+            <option>Master</option><option>Administrador</option><option>Financeiro</option>
+            <option selected>Operador de Caixa</option><option>Expedição</option>
+          </select>
+        </div>
+        <br><button id="saveAgencyUser" class="action">Cadastrar usuário</button>
+      </div>
+      <div class="card scroll">
+        <table><thead><tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Status</th><th></th></tr></thead><tbody id="agencyUsers"></tbody></table>
+      </div>
+    </section>
+
+    <section id="cobrancas" class="page">
+      <div class="card">
+        <h3>Emitir Cobrança</h3>
+        <div class="grid">
+          <div class="field"><label>Licenciado</label><select id="chgL"></select></div>
+          <div class="field"><label>Referência</label><input id="ref" type="month"></div>
+          <div class="field"><label>Vencimento</label><input id="due" type="date"></div>
+          <div class="field"><label>Valor</label><input id="chgAmount" type="number" step=".01"></div>
+        </div>
+        <br><button id="emitCharge" class="action">Emitir cobrança</button>
+      </div>
+      <div class="card scroll">
+        <table><thead><tr><th>Licenciado</th><th>Referência</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="charges"></tbody></table>
+      </div>
+    </section>
+
+    <section id="banco" class="page">
+      <div class="card">
+        <h3>Banco</h3>
+        <p class="notice">Cobranças em massa, remessa, retorno e conciliação.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="action secondary" onclick="bbtab('bbCobr')">Cobranças em massa</button>
+          <button class="action secondary" onclick="bbtab('bbRem')">Remessa</button>
+          <button class="action secondary" onclick="bbtab('bbRet')">Importar retorno</button>
+          <button class="action secondary" onclick="bbtab('bbConc')">Conciliação</button>
+          <button class="action secondary" onclick="bbtab('bbHist')">Histórico</button>
+          <button class="action secondary" onclick="bbtab('bbCfg')">Configuração</button>
+        </div>
+      </div>
+      <div id="bbCobr" class="card bbpanel">
+        <h3>Gerar cobranças em massa</h3>
+        <div class="grid g2"><div class="field"><label>Competência</label><input id="massRef" type="month"></div><div class="field"><label>Vencimento</label><input id="massDue" type="date"></div></div>
+        <br><button id="massCharges" class="action">Gerar para todos os licenciados ativos</button>
+      </div>
+      <div id="bbRem" class="card bbpanel hidden">
+        <h3>Remessa</h3>
+        <div class="field"><label>Competência</label><input id="remRef" type="month"></div>
+        <br><button id="makeRem" class="action">Gerar pré-remessa</button>
+        <div class="field" style="margin-top:12px"><textarea id="remContent" rows="8" readonly></textarea></div>
+        <p class="notice">A remessa real (CNAB) fica bloqueada até validarmos o layout do convênio.</p>
+      </div>
+      <div id="bbRet" class="card bbpanel hidden">
+        <h3>Importar retorno</h3>
+        <div class="field"><label>Arquivo CSV/TXT</label><input id="bbFile" type="file" accept=".csv,.txt,.ret"></div>
+        <br><button id="importBB" class="action">Importar</button>
+      </div>
+      <div id="bbConc" class="card bbpanel hidden scroll">
+        <h3>Conciliação</h3>
+        <table><thead><tr><th>Data</th><th>Documento</th><th>Pagador</th><th>Valor</th><th>Status</th><th>Conciliar</th></tr></thead><tbody id="bankRows"></tbody></table>
+      </div>
+      <div id="bbHist" class="card bbpanel hidden scroll">
+        <h3>Histórico de Remessas</h3>
+        <table><thead><tr><th>Arquivo</th><th>Competência</th><th>Títulos</th><th>Total</th><th>Status</th></tr></thead><tbody id="remTable"></tbody></table>
+      </div>
+      <div id="bbCfg" class="card bbpanel hidden">
+        <h3>Configuração bancária</h3>
+        <p class="notice">Somente Master pode alterar.</p>
+        <div class="grid g2">
+          <div class="field"><label>Convênio</label><input id="bbAgreement"></div>
+          <div class="field"><label>Carteira</label><input id="bbWallet"></div>
+          <div class="field"><label>Agência</label><input id="bbAgency"></div>
+          <div class="field"><label>Conta</label><input id="bbAccount"></div>
+          <div class="field"><label>Dígito</label><input id="bbDigit"></div>
+          <div class="field"><label>Layout CNAB</label><select id="bbLayout"><option>A DEFINIR</option><option>CNAB 240</option><option>CNAB 400</option></select></div>
+          <div class="field"><label>Beneficiário</label><input id="bbBeneficiary"></div>
+          <div class="field"><label>CNPJ beneficiário</label><input id="bbBeneficiaryTax"></div>
+        </div>
+        <br><button id="saveBBConfig" class="action">Salvar configuração</button>
+      </div>
+    </section>
+
+    <section id="parametros" class="page">
+      <div class="card">
+        <h3>Parametrizações</h3>
+        <p class="notice">Ajustes de negócio aplicados em runtime, sem precisar reimplantar o sistema.</p>
+        <table><thead><tr><th>Chave</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody id="paramsTable"></tbody></table>
+      </div>
+    </section>
+
+    <section id="usuarios" class="page">
+      <div class="card">
+        <h3>Usuários</h3>
+        <p class="notice">Somente Master pode cadastrar. Supervisor pode visualizar. Operador não acessa esta tela.</p>
+        <div class="grid">
+          <div class="field"><label>Usuário</label><input id="newUser"></div>
+          <div class="field"><label>Senha</label><input id="newPass" type="password"></div>
+          <div class="field"><label>Perfil</label><select id="newRole"><option>Operador</option><option>Supervisor</option><option>Master</option></select></div>
+        </div>
+        <br><button id="saveUser" class="action">Cadastrar usuário</button>
+      </div>
+      <div class="card scroll"><table><tbody id="usersTable"></tbody></table></div>
+    </section>
+
+    <section id="audit" class="page">
+      <div class="card scroll"><table><tbody id="audits"></tbody></table></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = x => document.getElementById(x);
+let S = {};
+const esc = x => String(x ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(url, opts) {
+  const res = await fetch(url, opts);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.detail || json.error || 'Erro');
+  return json;
+}
+
+async function loadAll() {
+  const [state, licensees, licenses, charges, bankEntries, bankConfig, remittances, params] = await Promise.all([
+    api('/api/v1/state'),
+    api('/api/v1/licensees'),
+    api('/api/v1/licenses'),
+    api('/api/v1/charges'),
+    api('/api/v1/bank/entries'),
+    api('/api/v1/bank/config'),
+    api('/api/v1/bank/remittances'),
+    api('/api/v1/params').catch(() => []),
+  ]);
+  S = { state, licensees, licenses, charges, bankEntries, bankConfig, remittances, params };
+  let usersTable = [];
+  try { usersTable = await api('/api/v1/users'); } catch (e) {}
+  S.usersTable = usersTable;
+  render();
+}
+
+function render() {
+  const rank = { Operador: 1, Supervisor: 2, Master: 3 };
+  const ur = rank[S.state.user?.role] || 0;
+  document.querySelectorAll('[data-minrole]').forEach(b => b.style.display = ur >= (rank[b.dataset.minrole] || 99) ? 'block' : 'none');
+
+  const m = S.state.metrics;
+  $('metrics').innerHTML = `
+    <div class="metric">Licenciados<b>${m.licensees}</b></div>
+    <div class="metric">Ativos<b>${m.active}</b></div>
+    <div class="metric">Inadimplentes / Bloqueados<b>${m.late_or_blocked}</b></div>
+    <div class="metric">Usuários ativos reportados<b>${m.reported_active_users}</b></div>`;
+
+  const licOpts = S.licensees.map(l => `<option value="${l.id}">${esc(l.trade_name || l.legal_name)}</option>`).join('');
+  $('licL').innerHTML = licOpts;
+  $('chgL').innerHTML = licOpts;
+  if ($('agLicensee')) {
+    const keepSelection = $('agLicensee').value;
+    $('agLicensee').innerHTML = licOpts;
+    if (keepSelection) $('agLicensee').value = keepSelection;
+  }
+
+  $('licensees').innerHTML = S.licensees.map(l => `<tr>
+    <td>${esc(l.trade_name || l.legal_name)}</td>
+    <td>${esc(l.tax_id)}</td>
+    <td>${esc(l.city || '')}${l.state ? '/' + esc(l.state) : ''}</td>
+    <td>${esc(l.contact_name || '')}</td>
+    <td>${esc(l.status)}</td>
+    <td><select onchange="setStatus(${l.id}, this.value)">
+      ${['Ativo','Inadimplente','Bloqueado','Expirado'].map(s => `<option ${l.status===s?'selected':''}>${s}</option>`).join('')}
+    </select></td>
+  </tr>`).join('');
+
+  $('licenses').innerHTML = S.licenses.map(x => {
+    const l = S.licensees.find(li => li.id === x.licensee_id) || {};
+    return `<tr><td>${esc(l.trade_name || l.legal_name || '')}</td><td>${esc(x.license_uid)}</td><td>${esc(x.expires_at)}</td><td>${x.max_users}</td><td>${esc(x.status)}</td></tr>`;
+  }).join('');
+
+  $('charges').innerHTML = S.charges.map(x => {
+    const l = S.licensees.find(li => li.id === x.licensee_id) || {};
+    return `<tr><td>${esc(l.trade_name || l.legal_name || '')}</td><td>${esc(x.reference_month)}</td><td>${esc(x.due_date)}</td><td>R$ ${Number(x.amount).toFixed(2)}</td><td>${esc(x.status)}</td>
+      <td>${x.status !== 'Paga' ? `<button class="action secondary" onclick="payCharge(${x.id})">Marcar paga</button>` : ''}</td></tr>`;
+  }).join('');
+
+  const bc = S.bankConfig || {};
+  if ($('bbAgreement')) {
+    $('bbAgreement').value = bc.agreement || ''; $('bbWallet').value = bc.wallet || '';
+    $('bbAgency').value = bc.agency || ''; $('bbAccount').value = bc.account_no || '';
+    $('bbDigit').value = bc.account_digit || ''; $('bbLayout').value = bc.cnab_layout || 'A DEFINIR';
+    $('bbBeneficiary').value = bc.beneficiary_name || ''; $('bbBeneficiaryTax').value = bc.beneficiary_tax_id || '';
+  }
+
+  $('remTable').innerHTML = (S.remittances || []).map(x => `<tr><td>${esc(x.file_name)}</td><td>${esc(x.reference_month)}</td><td>${x.total_titles}</td><td>R$ ${Number(x.total_amount).toFixed(2)}</td><td>${esc(x.status)}</td></tr>`).join('');
+
+  const openCharges = S.charges.filter(x => x.status === 'Aberta');
+  $('bankRows').innerHTML = (S.bankEntries || []).map(x => `<tr>
+    <td>${esc(x.entry_date)}</td><td>${esc(x.document)}</td><td>${esc(x.payer)}</td><td>R$ ${Number(x.amount).toFixed(2)}</td><td>${esc(x.status)}</td>
+    <td>${x.status === 'Pendente' ? `<select onchange="if(this.value) reconcile(${x.id}, +this.value)"><option value="">Escolha cobrança...</option>${openCharges.map(c => {
+      const l = S.licensees.find(li => li.id === c.licensee_id) || {};
+      return `<option value="${c.id}">${esc(l.trade_name || l.legal_name || '')} — ${c.reference_month} — R$ ${Number(c.amount).toFixed(2)}</option>`;
+    }).join('')}</select>` : ''}</td></tr>`).join('');
+
+  $('usersTable').innerHTML = (S.usersTable || []).map(x => `<tr><td>${esc(x.username)}</td><td>${esc(x.role)}</td><td>${x.active ? 'Ativo' : 'Inativo'}</td></tr>`).join('');
+
+  $('audits').innerHTML = (S.state.audit || []).map(x => `<tr><td>${esc(x.created_at)}</td><td>${esc(x.username)}</td><td>${esc(x.action)}</td><td>${esc(x.entity || '')}</td></tr>`).join('');
+
+  $('paramsTable').innerHTML = (S.params || []).map(p => `<tr>
+    <td><code>${esc(p.key)}</code></td><td class="notice">${esc(p.description || '')}</td>
+    <td><input value='${esc(JSON.stringify(p.value))}' id="param_${esc(p.key)}" style="width:120px"></td>
+    <td><button class="action secondary" onclick="saveParam('${p.key}')">Salvar</button></td>
+  </tr>`).join('');
+}
+
+function openp(p) {
+  document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+  $(p).classList.add('active');
+  $('title').textContent = document.querySelector(`[data-p="${p}"]`).textContent;
+}
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => openp(b.dataset.p));
+
+function bbtab(id) {
+  document.querySelectorAll('.bbpanel').forEach(x => x.classList.add('hidden'));
+  $(id).classList.remove('hidden');
+}
+
+$('enter').onclick = async () => {
+  try {
+    await api('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: $('lu').value, password: $('lp').value }) });
+    $('login').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    await loadAll();
+  } catch (e) { $('msg').textContent = e.message; }
+};
+
+$('saveLicensee').onclick = async () => {
+  try {
+    await api('/api/v1/licensees', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        person_type: $('personType').value,
+        legal_name: $('legal').value, trade_name: $('trade').value, tax_id: $('tax').value,
+        state_registration: $('stateReg').value || null,
+        zip_code: $('zip').value || null, address_street: $('street').value || null,
+        address_number: $('number').value || null, address_complement: $('complement').value || null,
+        address_district: $('district').value || null, city: $('city').value || null, state: $('state').value || null,
+        ibge_city_code: $('ibge').value || null,
+        contact_name: $('contactName').value || null, contact_role: $('contactRole').value || null,
+        contact_email: $('contactEmail').value || null, contact_phone: $('contactPhone').value || null,
+        billing_email: $('email').value || null, billing_phone: $('phone').value || null,
+        website: $('website').value || null,
+        correios_mcu: $('correiosMcu').value || null,
+        contracted_users: +$('users').value || 1, monthly_fee: +$('fee').value || 0, billing_day: +$('billday').value || 10,
+        notes: $('notes').value || null,
+      })
+    });
+    await loadAll(); openp('clientes');
+  } catch (e) { alert(e.message); }
+};
+
+$('genLic').onclick = async () => {
+  try {
+    const j = await api('/api/v1/licenses/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ licensee_id: +$('licL').value, expires_at: $('licExp').value || null, max_users: +$('licMax').value || undefined }) });
+    $('licCode').value = j.license_code;
+    await loadAll();
+  } catch (e) { alert(e.message); }
+};
+
+$('emitCharge').onclick = async () => {
+  try {
+    await api('/api/v1/charges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ licensee_id: +$('chgL').value, reference_month: $('ref').value, due_date: $('due').value, amount: +$('chgAmount').value }) });
+    await loadAll();
+  } catch (e) { alert(e.message); }
+};
+
+$('massCharges').onclick = async () => {
+  try {
+    const j = await api('/api/v1/charges/mass', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference_month: $('massRef').value, due_date: $('massDue').value }) });
+    await loadAll(); alert(j.created + ' cobranças criadas.');
+  } catch (e) { alert(e.message); }
+};
+
+$('makeRem').onclick = async () => {
+  try {
+    const j = await api('/api/v1/bank/remittance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference_month: $('remRef').value }) });
+    $('remContent').value = j.content || ''; await loadAll(); alert(j.warning || 'Pré-remessa gerada.');
+  } catch (e) { alert(e.message); }
+};
+
+$('saveBBConfig').onclick = async () => {
+  try {
+    await api('/api/v1/bank/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      agreement: $('bbAgreement').value, wallet: $('bbWallet').value, agency: $('bbAgency').value, account_no: $('bbAccount').value,
+      account_digit: $('bbDigit').value, cnab_layout: $('bbLayout').value, beneficiary_name: $('bbBeneficiary').value, beneficiary_tax_id: $('bbBeneficiaryTax').value,
+    }) });
+    await loadAll(); alert('Configuração salva.');
+  } catch (e) { alert(e.message); }
+};
+
+$('saveUser').onclick = async () => {
+  try {
+    await api('/api/v1/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: $('newUser').value, password: $('newPass').value, role: $('newRole').value }) });
+    await loadAll();
+  } catch (e) { alert(e.message); }
+};
+
+$('importBB').onclick = async () => {
+  const f = $('bbFile').files[0];
+  if (!f) return alert('Selecione o arquivo.');
+  const content = await f.text();
+  try {
+    const j = await api('/api/v1/bank/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_name: f.name, content }) });
+    await loadAll(); alert(j.rows + ' movimentos importados.');
+  } catch (e) { alert(e.message); }
+};
+
+async function reconcile(entryId, chargeId) {
+  if (!confirm('Conciliar este crédito com a cobrança selecionada?')) return;
+  try { await api('/api/v1/bank/reconcile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entry_id: entryId, charge_id: chargeId }) }); await loadAll(); }
+  catch (e) { alert(e.message); }
+}
+async function setStatus(id, status) {
+  try { await api(`/api/v1/licensees/${id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); await loadAll(); }
+  catch (e) { alert(e.message); }
+}
+async function payCharge(id) { await api(`/api/v1/charges/${id}/pay`, { method: 'POST' }); await loadAll(); }
+
+async function loadAgencyDetail() {
+  const licenseeId = $('agLicensee').value;
+  if (!licenseeId) return;
+
+  try {
+    const cred = await api(`/api/v1/licensees/${licenseeId}/correios-credential`);
+    $('agCredStatus').textContent = `Cadastrada: MCU ${cred.mcu}, usuário ${cred.correios_username}${cred.last_validated_at ? ', última validação em ' + cred.last_validated_at : ' (ainda não validada)'}.`;
+    $('agMcu').value = cred.mcu; $('agCorreiosUser').value = cred.correios_username;
+  } catch (e) {
+    $('agCredStatus').textContent = 'Nenhuma credencial cadastrada ainda para esta agência.';
+    $('agMcu').value = ''; $('agCorreiosUser').value = '';
+  }
+  $('agCorreiosPass').value = ''; $('agCorreiosToken').value = '';
+
+  const users = await api(`/api/v1/licensees/${licenseeId}/users`);
+  $('agencyUsers').innerHTML = users.map(u => `<tr>
+    <td>${esc(u.username)}</td><td>${esc(u.full_name || '')}</td><td>${esc(u.role)}</td><td>${u.active ? 'Ativo' : 'Inativo'}</td>
+    <td>${u.active ? `<button class="action secondary" onclick="deactivateAgencyUser(${licenseeId}, ${u.id})">Desativar</button>` : ''}</td>
+  </tr>`).join('');
+}
+
+$('saveCorreiosCred').onclick = async () => {
+  const licenseeId = $('agLicensee').value;
+  if (!licenseeId) return alert('Escolha uma agência.');
+  try {
+    await api(`/api/v1/licensees/${licenseeId}/correios-credential`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mcu: $('agMcu').value, correios_username: $('agCorreiosUser').value, password: $('agCorreiosPass').value, token: $('agCorreiosToken').value || null }),
+    });
+    await loadAgencyDetail(); alert('Credencial salva.');
+  } catch (e) { alert(e.message); }
+};
+
+$('saveAgencyUser').onclick = async () => {
+  const licenseeId = $('agLicensee').value;
+  if (!licenseeId) return alert('Escolha uma agência.');
+  try {
+    await api(`/api/v1/licensees/${licenseeId}/users`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: $('agUserUsername').value, full_name: $('agUserFullName').value || null, password: $('agUserPassword').value, role: $('agUserRole').value }),
+    });
+    $('agUserUsername').value = ''; $('agUserFullName').value = ''; $('agUserPassword').value = '';
+    await loadAgencyDetail();
+  } catch (e) { alert(e.message); }
+};
+
+async function deactivateAgencyUser(licenseeId, userId) {
+  if (!confirm('Desativar este usuário da agência?')) return;
+  try { await api(`/api/v1/licensees/${licenseeId}/users/${userId}/deactivate`, { method: 'POST' }); await loadAgencyDetail(); }
+  catch (e) { alert(e.message); }
+}
+async function saveParam(key) {
+  try {
+    const raw = $('param_' + key).value;
+    let value; try { value = JSON.parse(raw); } catch { value = raw; }
+    await api(`/api/v1/params/${key}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+    await loadAll();
+  } catch (e) { alert(e.message); }
+}
+</script>
+</body>
+</html>
