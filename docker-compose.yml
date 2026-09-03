@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bigpost
+      POSTGRES_PASSWORD: bigpost
+      POSTGRES_DB: bigpost
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bigpost -d bigpost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://bigpost:bigpost@db:5432/bigpost
+      JWT_SECRET: troque-esta-chave-em-producao
+      BOOTSTRAP_MASTER_USERNAME: Fifo
+      BOOTSTRAP_MASTER_PASSWORD: troque-esta-senha
+      COOKIE_SECURE: "false"  # true quando estiver atrás de HTTPS
+    ports:
+      - "8000:8000"
+    volumes:
+      - api_data:/app/data
+
+volumes:
+  db_data:
+  api_data:
