@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>BigPost — Cliente</title>
+<style>
+:root{--bg:#f4f6f8;--ink:#3d2b17;--line:#e5e8eb;--muted:#667684;--accent:#3d2b17}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.4 Arial,sans-serif;background:var(--bg);color:var(--ink)}
+.hidden{display:none!important}
+.login{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg)}
+.card,.box{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+aside{background:var(--ink);color:#fff;height:100vh;overflow-y:auto;position:sticky;top:0}
+aside h2{padding:20px;font-size:16px}
+nav button{width:100%;padding:12px 18px;text-align:left;border:0;background:transparent;color:#fff;cursor:pointer;font-size:13px}
+nav button:hover{background:#5c4327}
+main{padding:24px;max-width:1200px}
+.page{display:none}
+.page.active{display:block}
+h1{font-size:20px;margin:0 0 16px}
+h3{margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid.g2{grid-template-columns:repeat(2,1fr)}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:2px}
+.field label{font-size:12px;color:var(--muted)}
+input,select,textarea{padding:9px;border:1px solid #ccd4dc;border-radius:7px;font:inherit}
+.action{padding:8px 14px;border:0;border-radius:7px;background:var(--ink);color:#fff;cursor:pointer;font-size:13px}
+.action.secondary{background:#fff;color:var(--ink);border:1px solid #ccd4dc}
+table{width:100%;border-collapse:collapse;min-width:700px}
+th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
+.scroll{overflow:auto}
+.notice{color:var(--muted);font-size:12px}
+.section-title{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 6px;border-top:1px solid var(--line);padding-top:14px}
+.section-title:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.badge{padding:2px 8px;border-radius:20px;font-size:11px}
+.badge.Pendente{background:#fdf0e0;color:#9a5b00}
+.badge.Aferido{background:#e6eefc;color:#1c4fa0}
+.badge.Postado,.badge.Entregue{background:#e2f5e9;color:#187a3f}
+.badge.Cancelado,.badge.Devolvido{background:#fbe4e4;color:#a53030}
+.badge[class*="Trânsito"]{background:#eef0fb;color:#4b3fa0}
+code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
+</style>
+</head>
+<body>
+
+<div id="login" class="login">
+  <div class="box">
+    <h2>BigPost — Cliente</h2>
+    <p class="notice">Emita etiquetas com a sua agência e acompanhe as encomendas.</p>
+    <div class="field"><label>Código do licenciado / agência (ID)</label><input id="lid" type="number"></div>
+    <div class="field"><label>Usuário</label><input id="lu"></div>
+    <div class="field"><label>Senha</label><input id="lp" type="password"></div>
+    <br>
+    <button id="enter" class="action">Entrar</button>
+    <p id="msg" style="color:#a53030"></p>
+    <p class="notice">Já usa integração via API key? Não precisa logar aqui — veja o cabeçalho <code>Authorization: Bearer &lt;api_key&gt;</code> na documentação.</p>
+    <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a></p>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <aside>
+    <h2>BigPost<br><small style="font-weight:normal;opacity:.7">Cliente</small></h2>
+    <nav>
+      <button data-p="emitir">Emitir Etiqueta</button>
+      <button data-p="encomendas">Minhas Encomendas</button>
+      <button data-p="integracao">Integração / API</button>
+    </nav>
+  </aside>
+  <main>
+    <h1 id="title">Emitir Etiqueta</h1>
+
+    <section id="emitir" class="page active">
+      <div class="card">
+        <h3>Nova Etiqueta</h3>
+
+        <div class="section-title">Destinatário</div>
+        <div class="grid g2">
+          <div class="field"><label>Nome *</label><input id="rName"></div>
+          <div class="field"><label>CPF/CNPJ (opcional)</label><input id="rTax"></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Telefone</label><input id="rPhone"></div>
+          <div class="field"><label>E-mail</label><input id="rEmail"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>CEP *</label><input id="rZip"></div>
+          <div class="field"><label>Logradouro</label><input id="rStreet"></div>
+          <div class="field"><label>Número</label><input id="rNumber"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Complemento</label><input id="rComplement"></div>
+          <div class="field"><label>Bairro</label><input id="rDistrict"></div>
+          <div class="field"><label>Cidade</label><input id="rCity"></div>
+        </div>
+        <div class="field" style="max-width:120px"><label>UF</label><input id="rState" maxlength="2"></div>
+
+        <div class="section-title">Pacote</div>
+        <div class="grid">
+          <div class="field"><label>Serviço (PAC/SEDEX/...)</label><input id="pService"></div>
+          <div class="field"><label>Peso declarado (kg)</label><input id="pWeight" type="number" step=".001"></div>
+          <div class="field"><label>Valor declarado (R$)</label><input id="pValue" type="number" step=".01"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Comprimento (cm)</label><input id="pLength" type="number" step=".1"></div>
+          <div class="field"><label>Largura (cm)</label><input id="pWidth" type="number" step=".1"></div>
+          <div class="field"><label>Altura (cm)</label><input id="pHeight" type="number" step=".1"></div>
+        </div>
+        <div class="field"><label>Conteúdo</label><input id="pContents"></div>
+        <div class="field"><label>Referência interna (opcional)</label><input id="pRef"></div>
+
+        <br><button id="saveShipment" class="action">Emitir etiqueta</button>
+      </div>
+    </section>
+
+    <section id="encomendas" class="page">
+      <div class="card">
+        <div class="grid g2">
+          <div class="field"><label>Filtrar por status</label>
+            <select id="statusFilter">
+              <option value="">Todos</option>
+              <option>Pendente</option><option>Aferido</option><option>Postado</option>
+              <option>Em Trânsito</option><option>Entregue</option><option>Devolvido</option><option>Cancelado</option>
+            </select>
+          </div>
+          <div class="field"><label>&nbsp;</label><button id="reload" class="action secondary">Atualizar</button></div>
+        </div>
+      </div>
+      <br>
+      <div class="card scroll">
+        <table>
+          <thead><tr><th>ID</th><th>Destinatário</th><th>Status</th><th>Peso conf.</th><th>Preço conf.</th><th>Rastreio</th></tr></thead>
+          <tbody id="shipments"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="integracao" class="page">
+      <div class="card">
+        <h3>Chave de API</h3>
+        <p class="notice">Use pra emitir etiquetas automaticamente, sem precisar logar (cabeçalho <code>Authorization: Bearer &lt;chave&gt;</code> em <code>POST /api/v1/cliente/shipments</code> ou <code>/bulk</code>, até 200 por chamada).</p>
+        <p>Chave atual: <code id="apiKeyPrefix">—</code></p>
+        <button id="rotateKey" class="action">Gerar nova chave</button>
+        <p class="notice" id="newKeyNotice"></p>
+      </div>
+      <br>
+      <div class="card">
+        <h3>Webhook de acompanhamento</h3>
+        <p class="notice">Sempre que o status de uma encomenda mudar (aferida, postada, novo evento), enviamos um POST assinado (cabeçalho <code>X-BigPost-Signature</code>, HMAC-SHA256) pra essa URL.</p>
+        <div class="field"><label>URL de destino</label><input id="webhookUrl" placeholder="https://seusite.com/webhooks/bigpost"></div>
+        <div class="field"><label>Segredo (deixe em branco pra gerar automaticamente)</label><input id="webhookSecret"></div>
+        <br><button id="saveWebhook" class="action">Salvar</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = {};
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { credentials: 'include', ...opts });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+function esc(s) { return (s ?? '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+document.querySelectorAll('nav button[data-p]').forEach(b => b.onclick = () => openp(b.dataset.p));
+function openp(p) {
+  document.querySelectorAll('.page').forEach(s => s.classList.remove('active'));
+  $(p).classList.add('active');
+  $('title').textContent = document.querySelector(`button[data-p="${p}"]`).textContent;
+  if (p === 'encomendas') loadShipments();
+  if (p === 'integracao') loadIntegration();
+}
+
+$('enter').onclick = async () => {
+  try {
+    await api('/api/v1/auth/cliente/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ licensee_id: +$('lid').value, username: $('lu').value, password: $('lp').value })
+    });
+    $('login').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    S.me = await api('/api/v1/auth/cliente/me');
+  } catch (e) { $('msg').textContent = e.message; }
+};
+
+$('saveShipment').onclick = async () => {
+  try {
+    const shipment = await api('/api/v1/cliente/shipments', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        external_reference: $('pRef').value || null,
+        recipient_name: $('rName').value, recipient_tax_id: $('rTax').value || null,
+        recipient_phone: $('rPhone').value || null, recipient_email: $('rEmail').value || null,
+        recipient_zip: $('rZip').value,
+        recipient_street: $('rStreet').value || null, recipient_number: $('rNumber').value || null,
+        recipient_complement: $('rComplement').value || null, recipient_district: $('rDistrict').value || null,
+        recipient_city: $('rCity').value || null, recipient_state: $('rState').value || null,
+        service_type: $('pService').value || null,
+        weight_declared_kg: $('pWeight').value ? +$('pWeight').value : null,
+        length_cm: $('pLength').value ? +$('pLength').value : null,
+        width_cm: $('pWidth').value ? +$('pWidth').value : null,
+        height_cm: $('pHeight').value ? +$('pHeight').value : null,
+        declared_value: $('pValue').value ? +$('pValue').value : null,
+        contents_description: $('pContents').value || null,
+      })
+    });
+    alert(`Etiqueta #${shipment.id} emitida — status Pendente, aguardando aferição pela agência.`);
+    openp('encomendas');
+  } catch (e) { alert(e.message); }
+};
+
+async function loadShipments() {
+  const status = $('statusFilter').value;
+  const rows = await api('/api/v1/cliente/shipments' + (status ? `?status=${encodeURIComponent(status)}` : ''));
+  $('shipments').innerHTML = rows.map(s => `<tr>
+    <td>${s.id}</td>
+    <td>${esc(s.recipient_name)}</td>
+    <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
+    <td>${s.weight_confirmed_kg ?? '—'}</td>
+    <td>${s.price_confirmed != null ? 'R$ ' + Number(s.price_confirmed).toFixed(2) : '—'}</td>
+    <td>${esc(s.tracking_code || '—')}</td>
+  </tr>`).join('') || '<tr><td colspan="6" class="notice">Nenhuma encomenda ainda.</td></tr>';
+}
+$('statusFilter').onchange = loadShipments;
+$('reload').onclick = loadShipments;
+
+async function loadIntegration() {
+  const me = await api('/api/v1/auth/cliente/me');
+  $('apiKeyPrefix').textContent = me.api_key_prefix || 'nenhuma chave gerada ainda';
+  try {
+    const wh = await api('/api/v1/auth/cliente/webhook');
+    $('webhookUrl').value = wh.webhook_url || '';
+  } catch (e) {}
+}
+
+$('rotateKey').onclick = async () => {
+  if (!confirm('Gerar uma nova chave invalida a anterior. Continuar?')) return;
+  try {
+    const j = await api('/api/v1/auth/cliente/api-key/rotate', { method: 'POST' });
+    $('apiKeyPrefix').textContent = j.api_key_prefix;
+    $('newKeyNotice').textContent = `Nova chave (copie agora, não será mostrada de novo): ${j.api_key}`;
+  } catch (e) { alert(e.message); }
+};
+
+$('saveWebhook').onclick = async () => {
+  try {
+    await api('/api/v1/auth/cliente/webhook', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook_url: $('webhookUrl').value || null, webhook_secret: $('webhookSecret').value || null })
+    });
+    alert('Webhook salvo.');
+  } catch (e) { alert(e.message); }
+};
+</script>
+</body>
+</html>
