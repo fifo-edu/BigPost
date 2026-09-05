@@ -44,6 +44,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # Master | Supervisor | Operador
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
 
     __table_args__ = (
@@ -55,6 +57,23 @@ class User(Base):
 # Licenciados (empresas/agências cadastradas). Cadastro detalhado conforme
 # solicitado: endereço completo separado por campo + contato.
 # ---------------------------------------------------------------------------
+class Product(Base):
+    """Um sistema licenciável do catálogo (Agenda, AGF, BigPost, Fluxo
+    Financeiro, Minha Cidade Aqui, ...). Uma agência licenciada pode ter
+    várias licenças ativas, uma por produto contratado. `is_custom=True`
+    marca produtos criados avulsos pelo admin (agrupados sob "Customizados"
+    na tela) em vez dos produtos fixos do catálogo padrão."""
+
+    __tablename__ = "products"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    is_custom: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+
 class Licensee(Base):
     __tablename__ = "licensees"
 
@@ -145,6 +164,30 @@ class CorreiosCredential(Base):
     __table_args__ = (CheckConstraint("mcu ~ '^[0-9]{8}$'", name="ck_correios_cred_mcu_format"),)
 
 
+class ClientCorreiosCredential(Base):
+    """Credenciais dos Correios para o módulo BigPost Cliente (emissão de
+    etiquetas/postagem via contrato) — diferente da credencial de
+    CorreiosCredential (que é do site Correios Atende/CA, usada pelo MCU nos
+    módulos BigPost Agência/Operação). Aqui o Correios pede usuário, token de
+    API, número do cartão de postagem e número do contrato. Implantado pelo
+    Painel Master junto com a licença BigPost. Token fica criptografado em
+    repouso (app/services/crypto.py) e nunca é devolvido em texto puro."""
+
+    __tablename__ = "client_correios_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    licensee_id: Mapped[int] = mapped_column(ForeignKey("licensees.id"), nullable=False, unique=True)
+    correios_username: Mapped[str] = mapped_column(String(120), nullable=False)
+    token_encrypted: Mapped[str | None] = mapped_column(Text)
+    postal_card: Mapped[str] = mapped_column(String(20), nullable=False)  # Cartão de postagem
+    contract_number: Mapped[str] = mapped_column(String(20), nullable=False)  # Número do contrato
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_validated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
+    created_by: Mapped[str | None] = mapped_column(String(80))
+
+
 # ---------------------------------------------------------------------------
 # Usuários da AGÊNCIA licenciada (equipe que opera o dia a dia no módulo
 # Agência — login próprio, cookie session_agencia). Propositalmente uma
@@ -164,6 +207,8 @@ class LicenseeUser(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     created_by: Mapped[str | None] = mapped_column(String(80))
 
@@ -181,6 +226,7 @@ class License(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     licensee_id: Mapped[int] = mapped_column(ForeignKey("licensees.id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
     license_code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)  # token assinado (Ed25519)
     license_uid: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     expires_at: Mapped[str | None] = mapped_column(String(20))  # ISO date ou "PERPETUA"
