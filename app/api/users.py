@@ -6,7 +6,7 @@ from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import hash_password, require_role
 from app.models.models import User
-from app.schemas.schemas import UserCreate, UserOut
+from app.schemas.schemas import PasswordResetRequest, UserCreate, UserOut
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
@@ -50,3 +50,53 @@ def create_user(
         ip_address=client_ip(request),
     )
     return new_user
+
+
+@router.post("/{user_id}/reset-password", response_model=UserOut)
+def reset_password(
+    user_id: int,
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("Master")),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    target.password_hash = hash_password(payload.new_password)
+    db.commit()
+    db.refresh(target)
+    log_action(
+        db,
+        username=user.username,
+        role=user.role,
+        action="ZERAR_SENHA_USUARIO",
+        entity=target.username,
+        ip_address=client_ip(request),
+    )
+    return target
+
+
+@router.post("/{user_id}/unlock", response_model=UserOut)
+def unlock_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("Master")),
+):
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    target.locked = False
+    target.failed_attempts = 0
+    db.commit()
+    db.refresh(target)
+    log_action(
+        db,
+        username=user.username,
+        role=user.role,
+        action="DESBLOQUEAR_USUARIO",
+        entity=target.username,
+        ip_address=client_ip(request),
+    )
+    return target
