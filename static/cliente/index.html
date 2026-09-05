@@ -43,20 +43,21 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
 </style>
 </head>
 <body>
+<script src="/br-utils.js"></script>
 
 <div id="login" class="login">
-  <div class="box">
+  <form id="loginForm" class="box" autocomplete="on">
     <h2>BigPost — Cliente</h2>
     <p class="notice">Emita etiquetas com a sua agência e acompanhe as encomendas.</p>
     <div class="field"><label>Código do licenciado / agência (ID)</label><input id="lid" type="number"></div>
-    <div class="field"><label>Usuário</label><input id="lu"></div>
-    <div class="field"><label>Senha</label><input id="lp" type="password"></div>
+    <div class="field"><label>Usuário</label><input id="lu" name="username" autocomplete="username"></div>
+    <div class="field"><label>Senha</label><input id="lp" name="password" type="password" autocomplete="current-password"></div>
     <br>
-    <button id="enter" class="action">Entrar</button>
+    <button id="enter" type="submit" class="action">Entrar</button>
     <p id="msg" style="color:#a53030"></p>
     <p class="notice">Já usa integração via API key? Não precisa logar aqui — veja o cabeçalho <code>Authorization: Bearer &lt;api_key&gt;</code> na documentação.</p>
     <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a></p>
-  </div>
+  </form>
 </div>
 
 <div id="app" class="app hidden">
@@ -85,7 +86,7 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
           <div class="field"><label>E-mail</label><input id="rEmail"></div>
         </div>
         <div class="grid">
-          <div class="field"><label>CEP *</label><input id="rZip"></div>
+          <div class="field"><label>CEP *</label><input id="rZip" maxlength="9" placeholder="00000-000"></div>
           <div class="field"><label>Logradouro</label><input id="rStreet"></div>
           <div class="field"><label>Número</label><input id="rNumber"></div>
         </div>
@@ -182,7 +183,7 @@ function openp(p) {
   if (p === 'integracao') loadIntegration();
 }
 
-$('enter').onclick = async () => {
+async function doLogin() {
   try {
     await api('/api/v1/auth/cliente/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -192,7 +193,12 @@ $('enter').onclick = async () => {
     $('app').classList.remove('hidden');
     S.me = await api('/api/v1/auth/cliente/me');
   } catch (e) { $('msg').textContent = e.message; }
-};
+}
+$('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
+setupLoginForm(['lid', 'lu', 'lp'], doLogin);
+
+liveMask($('rTax'), maskCpfCnpj);
+attachCepAutofill('rZip', { street: 'rStreet', district: 'rDistrict', city: 'rCity', state: 'rState' });
 
 $('saveShipment').onclick = async () => {
   try {
@@ -200,9 +206,9 @@ $('saveShipment').onclick = async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         external_reference: $('pRef').value || null,
-        recipient_name: $('rName').value, recipient_tax_id: $('rTax').value || null,
+        recipient_name: $('rName').value, recipient_tax_id: onlyDigits($('rTax').value) || null,
         recipient_phone: $('rPhone').value || null, recipient_email: $('rEmail').value || null,
-        recipient_zip: $('rZip').value,
+        recipient_zip: onlyDigits($('rZip').value),
         recipient_street: $('rStreet').value || null, recipient_number: $('rNumber').value || null,
         recipient_complement: $('rComplement').value || null, recipient_district: $('rDistrict').value || null,
         recipient_city: $('rCity').value || null, recipient_state: $('rState').value || null,
@@ -228,7 +234,7 @@ async function loadShipments() {
     <td>${esc(s.recipient_name)}</td>
     <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
     <td>${s.weight_confirmed_kg ?? '—'}</td>
-    <td>${s.price_confirmed != null ? 'R$ ' + Number(s.price_confirmed).toFixed(2) : '—'}</td>
+    <td>${s.price_confirmed != null ? formatBRL(s.price_confirmed) : '—'}</td>
     <td>${esc(s.tracking_code || '—')}</td>
   </tr>`).join('') || '<tr><td colspan="6" class="notice">Nenhuma encomenda ainda.</td></tr>';
 }
