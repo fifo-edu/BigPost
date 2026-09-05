@@ -49,8 +49,14 @@ def upsert_credential(
     db: Session = Depends(get_db),
     user: User = Depends(require_role("Master")),
 ):
-    if not db.get(Licensee, licensee_id):
+    licensee = db.get(Licensee, licensee_id)
+    if not licensee:
         raise HTTPException(status_code=404, detail="Licenciado não encontrado")
+
+    # O MCU só faz sentido no contexto AGF — é aqui, ao salvar a credencial
+    # Correios Atende, que ele passa a valer para o licenciado (mantém
+    # Licensee.correios_mcu em sincronia com CorreiosCredential.mcu).
+    licensee.correios_mcu = payload.mcu
 
     cred = db.query(CorreiosCredential).filter(CorreiosCredential.licensee_id == licensee_id).first()
     is_new = cred is None
