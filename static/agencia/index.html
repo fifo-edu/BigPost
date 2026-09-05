@@ -40,19 +40,20 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
 </style>
 </head>
 <body>
+<script src="/br-utils.js"></script>
 
 <div id="login" class="login">
-  <div class="box">
+  <form id="loginForm" class="box" autocomplete="on">
     <h2>BigPost — Agência</h2>
     <p class="notice">Login da equipe da agência (Master, Administrador, Financeiro, Operador de Caixa, Expedição).</p>
     <div class="field"><label>Código do licenciado (ID)</label><input id="lid" type="number"></div>
-    <div class="field"><label>Usuário</label><input id="lu"></div>
-    <div class="field"><label>Senha</label><input id="lp" type="password"></div>
+    <div class="field"><label>Usuário</label><input id="lu" name="username" autocomplete="username"></div>
+    <div class="field"><label>Senha</label><input id="lp" name="password" type="password" autocomplete="current-password"></div>
     <br>
-    <button id="enter" class="action">Entrar</button>
+    <button id="enter" type="submit" class="action">Entrar</button>
     <p id="msg" style="color:#a53030"></p>
     <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/cliente/">/cliente</a></p>
-  </div>
+  </form>
 </div>
 
 <div id="app" class="app hidden">
@@ -102,10 +103,16 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
           <div class="field"><label>Nome Fantasia</label><input id="cTrade"></div>
         </div>
         <div class="grid">
-          <div class="field"><label>CEP</label><input id="cZip"></div>
-          <div class="field"><label>Cidade</label><input id="cCity"></div>
-          <div class="field"><label>UF</label><input id="cState" maxlength="2"></div>
+          <div class="field"><label>CEP</label><input id="cZip" maxlength="9" placeholder="00000-000"></div>
+          <div class="field"><label>Rua/Av</label><input id="cStreet"></div>
+          <div class="field"><label>Número</label><input id="cNumber"></div>
         </div>
+        <div class="grid">
+          <div class="field"><label>Complemento (opcional)</label><input id="cComplement"></div>
+          <div class="field"><label>Bairro</label><input id="cDistrict"></div>
+          <div class="field"><label>Cidade</label><input id="cCity"></div>
+        </div>
+        <div class="field" style="max-width:120px"><label>UF</label><input id="cState" maxlength="2"></div>
         <div class="grid g2">
           <div class="field"><label>Contato</label><input id="cContactName"></div>
           <div class="field"><label>E-mail de contato</label><input id="cContactEmail"></div>
@@ -153,7 +160,7 @@ function openp(p) {
   if (p === 'clientes') loadClients();
 }
 
-$('enter').onclick = async () => {
+async function doLogin() {
   try {
     await api('/api/v1/auth/agencia/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -164,7 +171,9 @@ $('enter').onclick = async () => {
     S.me = await api('/api/v1/auth/agencia/me');
     await loadShipments();
   } catch (e) { $('msg').textContent = e.message; }
-};
+}
+$('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
+setupLoginForm(['lid', 'lu', 'lp'], doLogin);
 
 async function loadShipments() {
   const status = $('statusFilter').value;
@@ -231,7 +240,7 @@ async function loadClients() {
   S.clients = rows;
   $('clientsTable').innerHTML = rows.map(c => `<tr>
     <td>${esc(c.trade_name || c.legal_name)}</td>
-    <td>${esc(c.tax_id)}</td>
+    <td>${esc(maskCpfCnpj(c.tax_id))}</td>
     <td>${esc(c.username)}</td>
     <td>${c.active ? 'Ativo' : 'Inativo'}</td>
     <td>${c.active ? `<button class="action secondary" onclick="deactivateClient(${c.id})">Desativar</button>` : ''}</td>
@@ -243,14 +252,20 @@ window.deactivateClient = async (id) => {
   catch (e) { alert(e.message); }
 };
 
+liveMask($('cTax'), maskCpfCnpj);
+attachCepAutofill('cZip', { street: 'cStreet', district: 'cDistrict', city: 'cCity', state: 'cState' });
+
 $('saveClient').onclick = async () => {
   try {
     await api('/api/v1/agencia/clients', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         person_type: $('cPersonType').value,
-        legal_name: $('cLegal').value, trade_name: $('cTrade').value || null, tax_id: $('cTax').value,
-        zip_code: $('cZip').value || null, city: $('cCity').value || null, state: $('cState').value || null,
+        legal_name: $('cLegal').value, trade_name: $('cTrade').value || null, tax_id: onlyDigits($('cTax').value),
+        zip_code: onlyDigits($('cZip').value) || null,
+        address_street: $('cStreet').value || null, address_number: $('cNumber').value || null,
+        address_complement: $('cComplement').value || null, address_district: $('cDistrict').value || null,
+        city: $('cCity').value || null, state: $('cState').value || null,
         contact_name: $('cContactName').value || null, contact_email: $('cContactEmail').value || null,
         username: $('cUsername').value, password: $('cPassword').value,
       })
