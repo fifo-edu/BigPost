@@ -17,6 +17,7 @@ from app.core.security import hash_password, require_role
 from app.models.models import Licensee, LicenseeUser, User
 from app.schemas.schemas import LICENSEE_ROLES, LicenseeUserCreate, LicenseeUserOut, PasswordResetRequest
 from app.services.audit import log_action
+from app.services.support_access import SUPPORT_USERNAME
 
 router = APIRouter(prefix="/api/v1/licensees/{licensee_id}/users", tags=["licensee-users"])
 
@@ -33,7 +34,12 @@ def list_licensee_users(
     licensee_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("Supervisor"))
 ):
     _get_licensee_or_404(db, licensee_id)
-    return db.query(LicenseeUser).filter(LicenseeUser.licensee_id == licensee_id).order_by(LicenseeUser.username).all()
+    return (
+        db.query(LicenseeUser)
+        .filter(LicenseeUser.licensee_id == licensee_id, LicenseeUser.username != SUPPORT_USERNAME)
+        .order_by(LicenseeUser.username)
+        .all()
+    )
 
 
 @router.post("", response_model=LicenseeUserOut)
