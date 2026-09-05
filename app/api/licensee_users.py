@@ -15,7 +15,7 @@ from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import hash_password, require_role
 from app.models.models import Licensee, LicenseeUser, User
-from app.schemas.schemas import LICENSEE_ROLES, LicenseeUserCreate, LicenseeUserOut
+from app.schemas.schemas import LICENSEE_ROLES, LicenseeUserCreate, LicenseeUserOut, PasswordResetRequest
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/v1/licensees/{licensee_id}/users", tags=["licensee-users"])
@@ -102,3 +102,62 @@ def deactivate_licensee_user(
         ip_address=client_ip(request),
     )
     return licensee_user
+
+
+def _get_licensee_user_or_404(db: Session, licensee_id: int, licensee_user_id: int) -> LicenseeUser:
+    licensee_user = (
+        db.query(LicenseeUser)
+        .filter(LicenseeUser.id == licensee_user_id, LicenseeUser.licensee_id == licensee_id)
+        .first()
+    )
+    if not licensee_user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return licensee_user
+
+
+@router.post("/{licensee_user_id}/reset-password", response_model=LicenseeUserOut)
+def reset_licensee_user_password(
+    licensee_id: int,
+    licensee_user_id: int,
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("Supervisor")),
+):
+    target = _get_licensee_user_or_404(db, licensee_id, licensee_user_id)
+    target.password_hash = hash_password(payload.new_password)
+    db.commit()
+    db.refresh(target)
+    log_action(
+        db,
+        username=user.username,
+        role=user.role,
+        action="ZERAR_SENHA_USUARIO_AGENCIA",
+        entity=f"licensee:{licensee_id}:{target.username}",
+        ip_address=client_ip(request),
+    )
+    return target
+
+
+@router.post("/{licensee_user_id}/unlock", response_model=LicenseeUserOut)
+def unlock_licensee_user(
+    licensee_id: int,
+    licensee_user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("Supervisor")),
+):
+    target = _get_licensee_user_or_404(db, licensee_id, licensee_user_id)
+    target.locked = False
+    target.failed_attempts = 0
+    db.commit()
+    db.refresh(target)
+    log_action(
+        db,
+        username=user.username,
+        role=user.role,
+        action="DESBLOQUEAR_USUARIO_AGENCIA",
+        entity=f"licensee:{licensee_id}:{target.username}",
+        ip_address=client_ip(request),
+    )
+    return target
