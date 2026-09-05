@@ -98,6 +98,20 @@ Não é necessária nenhuma migration de banco para essa integração — ela s�
 
 Os 4 portais são páginas HTML/JS estáticas, sem build step, servidas pela própria API. O login de `LicenseeUser` (`POST /api/v1/auth/agencia/login`) recebe um campo `portal: "agencia"|"operador"` — cada frontend manda o seu fixo — e a API rejeita (403) se o papel do usuário não bate com o portal (ex.: um usuário Expedição tentando logar em `/agencia/`), pra evitar confusão de quem deveria usar qual portal.
 
+### Modo suporte (Master interno entra em qualquer licenciado, sem saber o ID)
+
+As telas de login de `/agencia/`, `/operador/` e `/cliente/` pedem, além de usuário/senha, o "Código do licenciado (ID)" — cada uma delas é o portal de UM licenciado só. Pra quem faz suporte (equipe BigPost, conta `User` com papel Master), isso é ruim: precisaria descobrir o ID numérico interno de cada agência antes de logar.
+
+O link **"Sou da equipe BigPost (suporte)"**, na própria tela de login, resolve isso:
+
+1. Some o campo de ID; pede só usuário/senha — as mesmas credenciais de uma conta Master interna (a mesma que loga em `/`, a Administração). Validado contra a tabela `users`, não contra um valor fixo do `.env` — então funciona com qualquer Master (não só a conta de bootstrap) e continua funcionando depois de trocar a senha pela tela de Usuários.
+2. Autenticado, mostra a lista de licenciados (a mesma que já veio do Painel Master) pra escolher.
+3. Ao escolher, entra automaticamente naquele licenciado, já com acesso total (perfil Master) — sem digitar senha de novo.
+
+Endpoints (`app/api/auth_support.py`): `POST /api/v1/auth/support/login` → `GET /api/v1/auth/support/licensees` → `POST /api/v1/auth/support/enter/{licensee_id}` (corpo `{"portal": "agencia"|"operador"|"cliente"}`). O passo 1 usa uma sessão transitória de 10 minutos (cookie `session_support`) só pra sustentar a escolha do licenciado — não é uma sessão de trabalho.
+
+Como o módulo Agência/Operador (`LicenseeUser`) e o módulo Cliente (`Client`) exigem uma linha real na respectiva tabela para reaproveitar toda a autorização já existente, o primeiro acesso de suporte a um licenciado cria (uma vez só) uma conta técnica reservada nele — username fixo `_suporte_bigpost`, ver `app/services/support_access.py`. Essa conta **nunca aparece** nas listagens normais ("Usuários da agência" no admin, "Clientes" na Agência — os dois endpoints filtram esse username). Todo login e toda entrada em modo suporte gera auditoria (`LOGIN_SUPORTE`, `ENTRAR_SUPORTE`, visíveis em Logs/Auditoria no admin) com o licenciado acessado.
+
 ### Roteamento por subdomínio (produção)
 
 O mesmo processo/backend atende os 3 subdomínios (`agencia.`, `cliente.`, `operador.`) e o admin interno — é tudo a mesma API e o mesmo banco, só o HTML/JS estático servido em `/` muda conforme o cabeçalho `Host` (`app/core/subdomain_static.py`, ligado em `app/main.py`). Fora desses 3 subdomínios (domínio raiz, `localhost` puro, etc.) nada muda: os 4 portais continuam acessíveis por caminho (`/`, `/agencia/`, `/cliente/`, `/operador/`), como sempre — útil em desenvolvimento local.
@@ -117,6 +131,7 @@ Este ambiente de build não tinha acesso à internet para instalar pacotes (PyPI
 - O hash de senha PBKDF2, a criação/verificação de token de sessão (JWT HS256 caseiro, com o campo `typ` isolando os 3 tipos de ator) e a geração/verificação de API key (`app/core/security.py`) foram testados isoladamente.
 - A assinatura HMAC de webhook (`app/services/webhooks.py`) foi testada isoladamente (determinística, 64 hex chars).
 - O script de migração do protótipo antigo (`scripts/migrate_from_sqlite.py`) foi atualizado (removida a dependência do antigo cadastro de "produtos") e revalidado: gera SQL a partir de um SQLite de teste e aplica sem erro num Postgres limpo.
+- O fluxo de "modo suporte" (`app/api/auth_support.py`, `app/services/support_access.py`) e as telas de login atualizadas passam em `py_compile`/`node --check`, mas **não foram exercitadas contra um Postgres real** (sem rede pra subir o servidor aqui) — faça um teste manual completo (login master → escolher licenciado → entrar → conferir que a conta `_suporte_bigpost` não aparece em "Usuários da agência" nem em "Clientes") antes de considerar produção.
 
 O que **não pôde ser testado aqui** por falta de rede: subir o `uvicorn` de verdade e bater nos endpoints HTTP, rodar `alembic upgrade head` (a ferramenta em si), e testar os três portais num navegador de verdade. A migration foi escrita para espelhar exatamente o `schema.sql` já validado, mas faça o smoke test abaixo na sua máquina antes de considerar isso produção.
 
