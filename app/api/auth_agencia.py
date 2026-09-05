@@ -10,6 +10,7 @@ from app.core.security import create_token, get_current_licensee_user, verify_pa
 from app.models.models import LicenseeUser
 from app.schemas.schemas import LicenseeUserLoginRequest, LicenseeUserOut
 from app.services.audit import log_action
+from app.services.params import get_param
 
 router = APIRouter(prefix="/api/v1/auth/agencia", tags=["auth-agencia"])
 
@@ -25,8 +26,21 @@ def login(payload: LicenseeUserLoginRequest, request: Request, response: Respons
         )
         .first()
     )
+    if user and user.locked:
+        raise HTTPException(status_code=423, detail="Conta bloqueada por excesso de tentativas — peça ao administrador da agência para desbloquear")
+
     if not user or not verify_password(payload.password, user.password_hash):
+        if user:
+            max_attempts = get_param(db, "security.login_max_attempts", 5)
+            user.failed_attempts += 1
+            if user.failed_attempts >= max_attempts:
+                user.locked = True
+            db.commit()
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
+
+    if user.failed_attempts:
+        user.failed_attempts = 0
+        db.commit()
 
     token = create_token(
         user.username, "licensee_user", {"uid": user.id, "licensee_id": user.licensee_id, "role": user.role}
