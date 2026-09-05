@@ -11,6 +11,7 @@ from app.api import (
     auth,
     auth_agencia,
     auth_cliente,
+    auth_support,
     bank,
     charges,
     client_correios,
@@ -124,6 +125,7 @@ app.include_router(integrations_painel_master.router)
 
 # Módulo Agência (equipe da agência licenciada)
 app.include_router(auth_agencia.router)
+app.include_router(auth_support.router)
 app.include_router(clients.router)
 app.include_router(shipments_agencia.router)
 
