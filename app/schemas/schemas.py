@@ -297,6 +297,29 @@ class ClientLoginRequest(BaseModel):
     password: str
 
 
+# --------------------------- Auth: "modo suporte" (Master interno entra em qualquer licenciado) ---------------------------
+class SupportLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class SupportLicenseeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    legal_name: str
+    trade_name: str | None = None
+    tax_id: str
+    city: str | None = None
+    state: str | None = None
+    status: str
+
+
+class SupportEnterRequest(BaseModel):
+    # "agencia" | "operador" | "cliente" — qual portal fez a chamada (cada
+    # frontend estático manda o seu próprio valor fixo).
+    portal: str
+
+
 # --------------------------- Clientes de cada agência ---------------------------
 class ClientCreate(BaseModel):
     person_type: str = "PJ"
