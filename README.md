@@ -27,6 +27,63 @@ FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Sem dependências externas de a
 
 **Fluxo de uma encomenda**: o cliente emite a etiqueta (`POST /api/v1/cliente/shipments`, manual ou via API key) → status `Pendente` → a agência afere peso/preço (`POST /api/v1/agencia/shipments/{id}/aferir`, papel Operador de Caixa+) → status `Aferido` → a agência posta e registra o código de rastreio (`POST /api/v1/agencia/shipments/{id}/postar`, papel Expedição+) → status `Postado` → eventos adicionais (`Em Trânsito`, `Entregue`, ...) são lançados manualmente por ora (`POST /api/v1/agencia/shipments/{id}/eventos`) até que uma integração de rastreio automático dos Correios seja plugada aqui. Cada mudança de status dispara um webhook assinado (HMAC-SHA256, header `X-BigPost-Signature`) para a URL cadastrada pelo cliente.
 
+## Integração com o Painel Master (sistema externo)
+
+O **Painel Master** (`www.painel.fluxoempresa.com.br`, "Gestão Financeira Master") é um sistema **externo, já existente, que não faz parte deste projeto**. É lá que um licenciado é cadastrado e uma licença é emitida/cobrada — por isso o admin deste BigPost **não tem** mais telas de "Cadastrar Licenciado" nem "Licenças"; ele só gerencia a operação de quem já está licenciado (usuários da agência, credenciais Correios, cobranças).
+
+Para o BigPost ficar sabendo de um licenciado novo (ou de uma licença nova) cadastrado no Painel Master, é o **Painel Master quem chama a API deste BigPost** — dois endpoints, autenticados por segredo compartilhado (não é login de usuário):
+
+| Endpoint | Quando chamar | Efeito |
+|---|---|---|
+| `POST /api/v1/integrations/painel-master/licensees` | Ao cadastrar ou editar um licenciado no Painel Master | Cria o licenciado aqui se `tax_id` (CNPJ/CPF) ainda não existir, ou atualiza o cadastro existente (idempotente — pode reenviar) |
+| `POST /api/v1/integrations/painel-master/licenses` | Ao emitir/renovar uma licença no Painel Master | Gera e assina (Ed25519) uma licença para o licenciado (por `tax_id`) + produto (por `product_code`, ex. `BIGPOST`, `AGF`) já cadastrado |
+
+**Autenticação**: cabeçalho `X-API-Key: <segredo>` em toda chamada. Configure o mesmo valor aleatório (ex. `openssl rand -hex 32`) na variável `PAINEL_MASTER_API_KEY` do `.env` deste BigPost **e** no Painel Master. Enquanto `PAINEL_MASTER_API_KEY` estiver vazio no `.env`, os dois endpoints respondem sempre `401` (integração desligada).
+
+**Exemplo — cadastrar/atualizar um licenciado:**
+```bash
+curl -X POST https://SEU-BIGPOST/api/v1/integrations/painel-master/licensees \
+  -H "X-API-Key: SEGREDO_COMPARTILHADO" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "person_type": "PJ",
+    "legal_name": "Agência Exemplo LTDA",
+    "trade_name": "AGF Exemplo",
+    "tax_id": "12345678000199",
+    "zip_code": "01310100",
+    "address_street": "Av. Paulista",
+    "address_number": "1000",
+    "address_complement": "",
+    "address_district": "Bela Vista",
+    "city": "São Paulo",
+    "state": "SP",
+    "contact_name": "Fulano de Tal",
+    "contact_email": "fulano@exemplo.com.br",
+    "billing_email": "financeiro@exemplo.com.br",
+    "correios_mcu": "12345678",
+    "contracted_users": 3,
+    "monthly_fee": 199.90,
+    "billing_day": 10
+  }'
+```
+Resposta: o licenciado (com `id` interno do BigPost), formato igual ao de `GET /api/v1/licensees/{id}`. **Envie sempre o objeto completo** — é um "replace", igual à tela de edição do admin: campos omitidos são gravados como vazio quando o licenciado já existe.
+
+**Exemplo — emitir uma licença:**
+```bash
+curl -X POST https://SEU-BIGPOST/api/v1/integrations/painel-master/licenses \
+  -H "X-API-Key: SEGREDO_COMPARTILHADO" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tax_id": "12345678000199",
+    "product_code": "BIGPOST",
+    "expires_at": "2027-12-31",
+    "max_users": 5
+  }'
+```
+Resposta (`PainelMasterLicenseOut`): inclui `license_code` — o token assinado (formato `PM1.<payload>.<assinatura>`) que o Painel Master deve repassar ao licenciado para ativar o app. `expires_at` vazio/omitido = licença perpétua. O licenciado precisa já existir aqui (chame `/licensees` antes, se for a primeira vez) e o produto precisa existir no catálogo (`code` de um `Product` ativo — os produtos padrão são semeados automaticamente na subida do BigPost: `AGENDA`, `AGF`, `BIGPOST`, `FLUXO_FINANCEIRO`, `MINHA_CIDADE_AQUI`).
+
+Não é necessária nenhuma migration de banco para essa integração — ela só reaproveita tabelas/colunas que já existiam (`licensees.tax_id`, `products.code`, a mesma lógica de assinatura de `licenses` já usada pelo admin interno).
+
 ## Três autenticações, três portais
 
 | Ator | Cookie / header | Papéis | Portal |
