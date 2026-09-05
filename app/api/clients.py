@@ -11,6 +11,7 @@ from app.core.security import hash_password, require_licensee_role
 from app.models.models import Client, LicenseeUser
 from app.schemas.schemas import ClientCreate, ClientOut
 from app.services.audit import log_action
+from app.services.support_access import SUPPORT_USERNAME
 
 router = APIRouter(prefix="/api/v1/agencia/clients", tags=["clients"])
 
@@ -19,7 +20,12 @@ router = APIRouter(prefix="/api/v1/agencia/clients", tags=["clients"])
 def list_clients(
     db: Session = Depends(get_db), user: LicenseeUser = Depends(require_licensee_role("Operador de Caixa"))
 ):
-    return db.query(Client).filter(Client.licensee_id == user.licensee_id).order_by(Client.legal_name).all()
+    return (
+        db.query(Client)
+        .filter(Client.licensee_id == user.licensee_id, Client.username != SUPPORT_USERNAME)
+        .order_by(Client.legal_name)
+        .all()
+    )
 
 
 @router.post("", response_model=ClientOut)
