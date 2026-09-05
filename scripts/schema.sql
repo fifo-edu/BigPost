@@ -12,6 +12,21 @@ CREATE TABLE users (
     role VARCHAR(20) NOT NULL CHECK (role IN ('Master','Supervisor','Operador')),
     password_hash VARCHAR(255) NOT NULL,
     active BOOLEAN NOT NULL DEFAULT TRUE,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+-- Catálogo de produtos/sistemas licenciáveis (Agenda, AGF, BigPost, Fluxo
+-- Financeiro, Minha Cidade Aqui, ...). Produtos customizados avulsos criados
+-- pela tela "Novo produto" ficam com is_custom = TRUE. Semeado no bootstrap
+-- da aplicação (app/services/products.py) — não por este schema.sql.
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(40) NOT NULL UNIQUE,
+    name VARCHAR(120) NOT NULL,
+    is_custom BOOLEAN NOT NULL DEFAULT FALSE,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -77,6 +92,25 @@ CREATE TABLE correios_credentials (
     created_by VARCHAR(80)
 );
 
+-- Credenciais do módulo BigPost Cliente (emissão de etiquetas via contrato),
+-- diferente da credencial acima (que é do site Correios Atende, usada pelos
+-- módulos BigPost Agência/Operação). Aqui o Correios pede usuário, token de
+-- API, cartão de postagem e número do contrato. Token fica criptografado
+-- (mesma chave Fernet de correios_credentials) — nunca em texto puro.
+CREATE TABLE client_correios_credentials (
+    id SERIAL PRIMARY KEY,
+    licensee_id INTEGER NOT NULL UNIQUE REFERENCES licensees(id),
+    correios_username VARCHAR(120) NOT NULL,
+    token_encrypted TEXT,
+    postal_card VARCHAR(20) NOT NULL,
+    contract_number VARCHAR(20) NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_validated_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_by VARCHAR(80)
+);
+
 -- Usuários da agência licenciada (equipe operacional — login no módulo
 -- Agência, não no admin interno do BigPost).
 CREATE TABLE licensee_users (
@@ -87,6 +121,8 @@ CREATE TABLE licensee_users (
     role VARCHAR(20) NOT NULL CHECK (role IN ('Master','Administrador','Financeiro','Operador de Caixa','Expedição')),
     password_hash VARCHAR(255) NOT NULL,
     active BOOLEAN NOT NULL DEFAULT TRUE,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     created_by VARCHAR(80),
     UNIQUE (licensee_id, username)
@@ -202,6 +238,7 @@ CREATE TABLE webhook_deliveries (
 CREATE TABLE licenses (
     id SERIAL PRIMARY KEY,
     licensee_id INTEGER NOT NULL REFERENCES licensees(id),
+    product_id INTEGER NOT NULL REFERENCES products(id),
     license_code TEXT NOT NULL UNIQUE,
     license_uid VARCHAR(40) NOT NULL UNIQUE,
     expires_at VARCHAR(20),
@@ -317,6 +354,7 @@ CREATE TABLE remittances (
 
 CREATE INDEX idx_licensees_status ON licensees(status);
 CREATE INDEX idx_licenses_licensee ON licenses(licensee_id);
+CREATE INDEX idx_licenses_product ON licenses(product_id);
 CREATE INDEX idx_charges_licensee ON charges(licensee_id);
 CREATE INDEX idx_bank_entries_status ON bank_entries(status);
 CREATE INDEX idx_audit_log_created_at ON audit_log(created_at);
