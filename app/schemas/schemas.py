@@ -283,6 +283,12 @@ class LicenseeUserLoginRequest(BaseModel):
     licensee_id: int
     username: str
     password: str
+    # Qual dos 2 portais fez a chamada — "agencia" (Master/Administrador/
+    # Financeiro) ou "operador" (Operador de Caixa/Expedição). Cada frontend
+    # estático manda seu próprio valor fixo; usado só para impedir login
+    # "no portal errado" (ver app/api/auth_agencia.py). Default "agencia"
+    # por compatibilidade com chamadas antigas.
+    portal: str = "agencia"
 
 
 class ClientLoginRequest(BaseModel):
