@@ -8,6 +8,7 @@ from app.core.security import create_access_token, get_current_user, verify_pass
 from app.models.models import User
 from app.schemas.schemas import LoginRequest, UserOut
 from app.services.audit import log_action
+from app.services.params import get_param
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -19,7 +20,16 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         .filter(User.username.ilike(payload.username), User.active.is_(True))
         .first()
     )
+    if user and user.locked:
+        raise HTTPException(status_code=423, detail="Conta bloqueada por excesso de tentativas — peça a um Master para desbloquear")
+
     if not user or not verify_password(payload.password, user.password_hash):
+        if user:
+            max_attempts = get_param(db, "security.login_max_attempts", 5)
+            user.failed_attempts += 1
+            if user.failed_attempts >= max_attempts:
+                user.locked = True
+            db.commit()
         log_action(
             db,
             username=payload.username,
@@ -30,6 +40,10 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
             ip_address=client_ip(request),
         )
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
+
+    if user.failed_attempts:
+        user.failed_attempts = 0
+        db.commit()
     token = create_access_token(user)
     response.set_cookie(
         "session",
