@@ -16,6 +16,7 @@ class UserOut(BaseModel):
     full_name: str | None = None
     role: str
     active: bool
+    locked: bool = False
 
 
 class UserCreate(BaseModel):
@@ -23,6 +24,10 @@ class UserCreate(BaseModel):
     full_name: str | None = None
     password: str = Field(min_length=6)
     role: str = "Operador"
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str = Field(min_length=6)
 
 
 # --------------------------- Licensees (cadastro detalhado) ---------------------------
@@ -76,6 +81,7 @@ class LicenseeOut(LicenseeCreate):
 # --------------------------- Licenses ---------------------------
 class LicenseGenerateRequest(BaseModel):
     licensee_id: int
+    product_id: int
     expires_at: str | None = None  # YYYY-MM-DD ou vazio = PERPETUA
     max_users: int | None = None
     features: dict | None = None
@@ -85,12 +91,58 @@ class LicenseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     licensee_id: int
+    product_id: int
     license_uid: str
     expires_at: str | None
     max_users: int
     status: str
     created_at: datetime
     created_by: str | None
+
+
+# --------------------------- Integração Painel Master ---------------------------
+# O Painel Master (sistema externo de gestão financeira/licenciamento — NÃO faz
+# parte deste projeto) chama a API abaixo quando cadastra um licenciado ou
+# emite uma licença por lá, para replicar aqui o necessário à operação
+# (usuários da agência, credenciais Correios, cobranças). Ver
+# app/api/integrations_painel_master.py.
+class PainelMasterLicenseeUpsert(LicenseeCreate):
+    """Mesmos campos de LicenseeCreate. O identificador usado para decidir
+    entre criar e atualizar é `tax_id` (CNPJ/CPF) — não um ID interno do
+    BigPost, que o Painel Master não tem como conhecer de antemão."""
+
+    pass
+
+
+class PainelMasterLicenseRequest(BaseModel):
+    tax_id: str
+    product_code: str
+    expires_at: str | None = None  # YYYY-MM-DD ou vazio = PERPETUA
+    max_users: int | None = None
+    features: dict | None = None
+
+
+class PainelMasterLicenseOut(LicenseOut):
+    """Igual a LicenseOut, mas também inclui o token assinado (license_code):
+    o Painel Master precisa desse código para repassar ao licenciado ativar
+    o app — o endpoint interno de listagem não devolve isso hoje."""
+
+    license_code: str
+
+
+# --------------------------- Produtos / catálogo de licenças ---------------------------
+class ProductCreate(BaseModel):
+    code: str
+    name: str
+
+
+class ProductOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    code: str
+    name: str
+    is_custom: bool
+    active: bool
 
 
 class LicenseValidateRequest(BaseModel):
@@ -183,6 +235,27 @@ class CorreiosCredentialOut(BaseModel):
     updated_at: datetime
 
 
+# --------------------------- BigPost Cliente: credenciais Correios (contrato) ---------------------------
+class ClientCorreiosCredentialUpsert(BaseModel):
+    correios_username: str
+    token: str | None = None
+    postal_card: str
+    contract_number: str
+
+
+class ClientCorreiosCredentialOut(BaseModel):
+    """Nunca inclui o token em texto puro."""
+
+    licensee_id: int
+    correios_username: str
+    postal_card: str
+    contract_number: str
+    has_token: bool
+    active: bool
+    last_validated_at: datetime | None
+    updated_at: datetime
+
+
 # --------------------------- Usuários da agência licenciada ---------------------------
 LICENSEE_ROLES = ("Master", "Administrador", "Financeiro", "Operador de Caixa", "Expedição")
 
@@ -202,6 +275,7 @@ class LicenseeUserOut(BaseModel):
     full_name: str | None
     role: str
     active: bool
+    locked: bool = False
 
 
 # --------------------------- Auth: Agência (LicenseeUser) e Cliente (Client) ---------------------------
