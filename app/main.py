@@ -9,13 +9,16 @@ from app.api import (
     auth_cliente,
     bank,
     charges,
+    client_correios,
     clients,
     correios,
     dashboard,
+    integrations_painel_master,
     licensee_users,
     licenses,
     licensees,
     params,
+    products,
     shipments_agencia,
     shipments_cliente,
     users,
@@ -26,6 +29,7 @@ from app.core.security import hash_password
 from app.models.models import BankConfig, User
 from app.services.licensing import ensure_keys
 from app.services.params import seed_defaults
+from app.services.products import seed_core_products
 
 
 def bootstrap() -> None:
@@ -48,6 +52,7 @@ def bootstrap() -> None:
             db.add(BankConfig(id=1))
         db.commit()
         seed_defaults(db)
+        seed_core_products(db)
     finally:
         db.close()
 
@@ -66,11 +71,18 @@ app.include_router(users.router)
 app.include_router(licensees.router)
 app.include_router(licensee_users.router)
 app.include_router(correios.router)
+app.include_router(client_correios.router)
+app.include_router(products.router)
 app.include_router(licenses.router)
 app.include_router(charges.router)
 app.include_router(bank.router)
 app.include_router(params.router)
 app.include_router(dashboard.router)
+
+# Integração com o Painel Master (sistema externo — cadastra/licencia por lá
+# e chama esta API para replicar o necessário aqui). Ver
+# app/api/integrations_painel_master.py.
+app.include_router(integrations_painel_master.router)
 
 # Módulo Agência (equipe da agência licenciada)
 app.include_router(auth_agencia.router)
