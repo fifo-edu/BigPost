@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     # COOKIE_SECURE=false no .env para conseguir logar pelo navegador.
     cookie_secure: bool = True
 
+    # Segredo compartilhado que o Painel Master (sistema externo, fora deste
+    # projeto) usa para chamar a API de integração deste BigPost (cabeçalho
+    # X-API-Key) quando cadastra um licenciado ou emite uma licença por lá.
+    # Vazio = integração desligada (endpoints respondem 401 sempre). Ver
+    # app/api/integrations_painel_master.py.
+    painel_master_api_key: str = ""
+
     @property
     def data_path(self) -> Path:
         p = Path(self.data_dir)
