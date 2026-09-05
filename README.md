@@ -1,9 +1,10 @@
 # BigPost
 
-ERP de criação, emissão e gerenciamento de postagens via Correios, para agências franqueadas (AGF). Sistema único e integrado — não depende de nenhum serviço externo de licenciamento — com três frentes:
+ERP de criação, emissão e gerenciamento de postagens via Correios, para agências franqueadas (AGF). O cadastro/licenciamento de agências é feito num sistema externo (Painel Master — ver seção própria abaixo); este projeto cobre a operação de quem já está licenciado, com quatro frentes:
 
-- **Administração interna** (equipe do BigPost): cadastro e licenciamento das agências, cobrança, parametrização.
-- **Módulo Agência**: a equipe da agência franqueada processa as encomendas que os clientes emitem — aferição (peso/preço) e postagem (código de rastreio).
+- **Administração interna** (equipe do BigPost): usuários da agência, credenciais Correios, cobrança, parametrização.
+- **Módulo Agência** (papéis Master, Administrador, Financeiro): gestão da agência — cadastro de clientes, relação com os módulos Cliente e Operador.
+- **Módulo Operador** (papéis Operador de Caixa, Expedição): fila de trabalho da equipe operacional — aferição (peso/preço) e postagem (código de rastreio) das encomendas.
 - **Módulo Cliente**: os clientes de uma agência emitem etiquetas (manual pelo portal, ou por integração via API key) e acompanham o envio até a entrega, com notificação por webhook a cada mudança de status.
 
 ## Stack
@@ -15,7 +16,7 @@ FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Sem dependências externas de a
 - `users` — equipe interna do BigPost (papéis: Master, Supervisor, Operador).
 - `licensees` — agências franqueadas licenciadas. Cadastro detalhado (endereço completo, pessoa de contato, dados de cobrança) + **MCU** (código de 8 dígitos que identifica a franqueada nos Correios — o resto já é dado de CNPJ/endereço).
 - `correios_credentials` — usuário/senha (e token) do site **www.correiosatende.correios.com.br**, por agência, **criptografados em repouso** (Fernet) — nunca devolvidos em texto puro pela API.
-- `licensee_users` — equipe operacional de uma agência (módulo Agência). Hierarquia de 5 papéis: **Master > Administrador > Financeiro > {Operador de Caixa, Expedição}** (esses dois últimos em pé de igualdade — um não manda no outro). Login próprio, cookie `session_agencia`.
+- `licensee_users` — equipe de uma agência, compartilhada pelos portais Agência e Operador. Hierarquia de 5 papéis: **Master > Administrador > Financeiro > {Operador de Caixa, Expedição}** (esses dois últimos em pé de igualdade — um não manda no outro); os 3 primeiros usam o portal Agência, os 2 últimos o portal Operador. Login próprio, cookie `session_agencia`.
 - `clients` — clientes de uma agência (módulo Cliente): quem emite etiqueta com ela. Cadastro detalhado (endereço, contato) + login próprio (usuário/senha, cookie `session_cliente`) + **API key** (`bp_live_...`) para integração programática.
 - `shipments` — encomendas/etiquetas: dados do destinatário e do pacote (declarados pelo cliente na emissão), depois peso/preço confirmados e código de rastreio (preenchidos pela agência). Status: `Pendente → Aferido → Postado → Em Trânsito → Entregue` (ou `Devolvido`/`Cancelado`).
 - `shipment_events` — histórico/rastreio de cada encomenda.
@@ -25,7 +26,7 @@ FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Sem dependências externas de a
 - `charges`, `bank_config`, `bank_imports`, `bank_entries`, `remittances` — cobrança e conciliação bancária (Banco do Brasil) das agências licenciadas.
 - `audit_log` — auditoria de ações nos três módulos.
 
-**Fluxo de uma encomenda**: o cliente emite a etiqueta (`POST /api/v1/cliente/shipments`, manual ou via API key) → status `Pendente` → a agência afere peso/preço (`POST /api/v1/agencia/shipments/{id}/aferir`, papel Operador de Caixa+) → status `Aferido` → a agência posta e registra o código de rastreio (`POST /api/v1/agencia/shipments/{id}/postar`, papel Expedição+) → status `Postado` → eventos adicionais (`Em Trânsito`, `Entregue`, ...) são lançados manualmente por ora (`POST /api/v1/agencia/shipments/{id}/eventos`) até que uma integração de rastreio automático dos Correios seja plugada aqui. Cada mudança de status dispara um webhook assinado (HMAC-SHA256, header `X-BigPost-Signature`) para a URL cadastrada pelo cliente.
+**Fluxo de uma encomenda**: o cliente emite a etiqueta (`POST /api/v1/cliente/shipments`, manual ou via API key) → status `Pendente` → a equipe operacional (portal Operador) afere peso/preço (`POST /api/v1/agencia/shipments/{id}/aferir`, papel Operador de Caixa+) → status `Aferido` → posta e registra o código de rastreio (`POST /api/v1/agencia/shipments/{id}/postar`, papel Expedição+) → status `Postado` → eventos adicionais (`Em Trânsito`, `Entregue`, ...) são lançados manualmente por ora (`POST /api/v1/agencia/shipments/{id}/eventos`) até que uma integração de rastreio automático dos Correios seja plugada aqui. Cada mudança de status dispara um webhook assinado (HMAC-SHA256, header `X-BigPost-Signature`) para a URL cadastrada pelo cliente. Os endpoints continuam sob `/api/v1/agencia/...` (nome histórico) mesmo sendo chamados pelo portal Operador agora — só o frontend que os chama mudou.
 
 ## Integração com o Painel Master (sistema externo)
 
@@ -84,15 +85,26 @@ Resposta (`PainelMasterLicenseOut`): inclui `license_code` — o token assinado 
 
 Não é necessária nenhuma migration de banco para essa integração — ela só reaproveita tabelas/colunas que já existiam (`licensees.tax_id`, `products.code`, a mesma lógica de assinatura de `licenses` já usada pelo admin interno).
 
-## Três autenticações, três portais
+## Quatro portais, três autenticações
 
-| Ator | Cookie / header | Papéis | Portal |
-|---|---|---|---|
-| `User` (equipe BigPost) | `session` | Master, Supervisor, Operador | `/` |
-| `LicenseeUser` (equipe da agência) | `session_agencia` | Master, Administrador, Financeiro, Operador de Caixa, Expedição | `/agencia/` |
-| `Client` (cliente da agência) | `session_cliente` ou `Authorization: Bearer <api_key>` | — | `/cliente/` |
+`LicenseeUser` é uma única tabela/cookie (`session_agencia`) compartilhada por 2 portais — o papel de cada usuário decide qual dos dois ele pode usar:
 
-Os três portais são páginas HTML/JS estáticas, sem build step, servidas pela própria API.
+| Ator | Cookie / header | Papéis | Portal (caminho) | Subdomínio (produção) |
+|---|---|---|---|---|
+| `User` (equipe BigPost) | `session` | Master, Supervisor, Operador | `/` | *(sem subdomínio dedicado ainda)* |
+| `LicenseeUser` — gestão da agência | `session_agencia` | Master, Administrador, Financeiro | `/agencia/` | `agencia.bigpost.fluxoempresa.com.br` |
+| `LicenseeUser` — equipe operacional | `session_agencia` | Operador de Caixa, Expedição | `/operador/` | `operador.bigpost.fluxoempresa.com.br` |
+| `Client` (cliente da agência) | `session_cliente` ou `Authorization: Bearer <api_key>` | — | `/cliente/` | `cliente.bigpost.fluxoempresa.com.br` |
+
+Os 4 portais são páginas HTML/JS estáticas, sem build step, servidas pela própria API. O login de `LicenseeUser` (`POST /api/v1/auth/agencia/login`) recebe um campo `portal: "agencia"|"operador"` — cada frontend manda o seu fixo — e a API rejeita (403) se o papel do usuário não bate com o portal (ex.: um usuário Expedição tentando logar em `/agencia/`), pra evitar confusão de quem deveria usar qual portal.
+
+### Roteamento por subdomínio (produção)
+
+O mesmo processo/backend atende os 3 subdomínios (`agencia.`, `cliente.`, `operador.`) e o admin interno — é tudo a mesma API e o mesmo banco, só o HTML/JS estático servido em `/` muda conforme o cabeçalho `Host` (`app/core/subdomain_static.py`, ligado em `app/main.py`). Fora desses 3 subdomínios (domínio raiz, `localhost` puro, etc.) nada muda: os 4 portais continuam acessíveis por caminho (`/`, `/agencia/`, `/cliente/`, `/operador/`), como sempre — útil em desenvolvimento local.
+
+**Isso não inclui apontar o DNS** dos 3 subdomínios para o servidor — isso é configuração de infraestrutura de quem administra `bigpost.fluxoempresa.com.br`, fora do escopo deste código. Depois de apontado (registro `CNAME`/`A` de cada subdomínio pro mesmo servidor/IP onde o BigPost já roda) e com HTTPS/certificado cobrindo os 3 (um certificado wildcard `*.bigpost.fluxoempresa.com.br` resolve os 3 de uma vez), o roteamento por `Host` já funciona sem precisar mexer em mais nada no código.
+
+Pra testar isso localmente sem depender de DNS: a maioria dos navegadores/SOs resolve `*.localhost` para `127.0.0.1` automaticamente — experimente `http://agencia.localhost:8000`, `http://cliente.localhost:8000` e `http://operador.localhost:8000` (todos apontando pro mesmo `uvicorn` rodando na 8000). No Windows, se não resolver sozinho, basta adicionar 3 linhas no arquivo `hosts` (`C:\Windows\System32\drivers\etc\hosts`) apontando cada subdomínio pra `127.0.0.1`.
 
 ## Dependências e o que foi validado nesta sessão
 
@@ -134,7 +146,7 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Depois de subir, pelo portal admin (`/`) cadastre a primeira agência (com MCU, se já for franqueada) e gere a licença; pela tela "Agência: Usuários & Correios" cadastre o primeiro usuário `Master` da agência (que já pode logar em `/agencia/` e cadastrar clientes e demais usuários da equipe) e, se aplicável, as credenciais do Correios Atende.
+Depois de subir, cadastre o licenciado e a licença pelo Painel Master (sistema externo — ver seção "Integração com o Painel Master" acima) ou, em dev, direto via `POST /api/v1/integrations/painel-master/licensees` com a `X-API-Key`. Pelo portal admin (`/`) cadastre o primeiro usuário `Master` da agência na tela "Licenciados" (que já pode logar em `/agencia/`, se for Administrador/Financeiro, ou `/operador/`, se for Operador de Caixa/Expedição — o papel escolhido decide qual portal ele usa) e, se aplicável, as credenciais do Correios Atende.
 
 ### Migrando os dados do protótipo antigo ("Gestão Financeira Master")
 
@@ -149,17 +161,20 @@ Depois, copie `data/license_private.pem` e `data/license_public.pem` do protóti
 
 ```
 app/
-  core/       # config, banco, segurança (hash de senha, JWT, API key, RBAC dos 3 atores)
+  core/       # config, banco, segurança (hash de senha, JWT, API key, RBAC), roteamento por
+              # subdomínio dos portais (subdomain_static.py)
   models/     # SQLAlchemy (schema)
   schemas/    # Pydantic (validação de entrada/saída da API)
-  api/        # routers FastAPI — internos (auth, licensees, ...), agência (auth_agencia,
-              # clients, shipments_agencia) e cliente (auth_cliente, shipments_cliente)
+  api/        # routers FastAPI — internos (auth, licensees, ...), integração com o Painel
+              # Master, agência+operador (auth_agencia, clients, shipments_agencia) e
+              # cliente (auth_cliente, shipments_cliente)
   services/   # licenciamento (Ed25519), parametrizações, auditoria, webhooks
 migrations/   # Alembic
 scripts/      # schema.sql (referência) e migração do SQLite antigo
-static/       # 3 portais HTML/JS puro, sem build step
+static/       # 4 portais HTML/JS puro, sem build step (+ br-utils.js compartilhado)
   index.html      # admin interno
-  agencia/        # módulo Agência
+  agencia/        # módulo Agência (Master, Administrador, Financeiro)
+  operador/       # módulo Operador (Operador de Caixa, Expedição)
   cliente/        # módulo Cliente
 ```
 
