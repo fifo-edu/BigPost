@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>BigPost — Operador</title>
+<style>
+:root{--bg:#f4f6f8;--ink:#33174d;--line:#e5e8eb;--muted:#667684;--accent:#33174d}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.4 Arial,sans-serif;background:var(--bg);color:var(--ink)}
+.hidden{display:none!important}
+.login{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg)}
+.card,.box{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+aside{background:var(--ink);color:#fff;height:100vh;overflow-y:auto;position:sticky;top:0}
+aside h2{padding:20px;font-size:16px}
+nav button{width:100%;padding:12px 18px;text-align:left;border:0;background:transparent;color:#fff;cursor:pointer;font-size:13px}
+nav button:hover{background:#4d2c6d}
+nav button.navlogout{border-top:1px solid rgba(255,255,255,.15);margin-top:10px;padding-top:14px;opacity:.85}
+nav button.navlogout:hover{opacity:1;background:#5a2626}
+main{padding:24px;max-width:1200px}
+.page{display:none}
+.page.active{display:block}
+h1{font-size:20px;margin:0 0 16px}
+h3{margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid.g2{grid-template-columns:repeat(2,1fr)}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:2px}
+.field label{font-size:12px;color:var(--muted)}
+input,select,textarea{padding:9px;border:1px solid #ccd4dc;border-radius:7px;font:inherit}
+.action{padding:8px 14px;border:0;border-radius:7px;background:var(--ink);color:#fff;cursor:pointer;font-size:13px}
+.action.secondary{background:#fff;color:var(--ink);border:1px solid #ccd4dc}
+table{width:100%;border-collapse:collapse;min-width:700px}
+th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
+.scroll{overflow:auto}
+.notice{color:var(--muted);font-size:12px}
+.badge{padding:2px 8px;border-radius:20px;font-size:11px}
+.badge.Pendente{background:#fdf0e0;color:#9a5b00}
+.badge.Aferido{background:#e6eefc;color:#1c4fa0}
+.badge.Postado,.badge.Entregue{background:#e2f5e9;color:#187a3f}
+.badge.Cancelado,.badge.Devolvido{background:#fbe4e4;color:#a53030}
+.badge[class*="Trânsito"]{background:#eef0fb;color:#4b3fa0}
+</style>
+</head>
+<body>
+<script src="/br-utils.js"></script>
+
+<div id="login" class="login">
+  <form id="loginForm" class="box" autocomplete="on">
+    <h2>BigPost — Operador</h2>
+    <p class="notice">Login da equipe operacional da agência (Operador de Caixa, Expedição) — aferição e postagem.</p>
+    <div class="field"><label>Código do licenciado (ID)</label><input id="lid" type="number"></div>
+    <div class="field"><label>Usuário</label><input id="lu" name="username" autocomplete="username"></div>
+    <div class="field"><label>Senha</label><input id="lp" name="password" type="password" autocomplete="current-password"></div>
+    <br>
+    <button id="enter" type="submit" class="action">Entrar</button>
+    <p id="msg" style="color:#a53030"></p>
+    <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a> · <a href="/cliente/">/cliente</a></p>
+  </form>
+</div>
+
+<div id="app" class="app hidden">
+  <aside>
+    <h2>BigPost<br><small style="font-weight:normal;opacity:.7">Operador</small></h2>
+    <nav>
+      <button data-p="fila">Fila de Encomendas</button>
+      <button id="logoutBtn" class="navlogout">Sair</button>
+    </nav>
+  </aside>
+  <main>
+    <h1 id="title">Fila de Encomendas</h1>
+
+    <section id="fila" class="page active">
+      <div class="card">
+        <div class="grid g2">
+          <div class="field"><label>Filtrar por status</label>
+            <select id="statusFilter">
+              <option value="">Todos</option>
+              <option>Pendente</option><option>Aferido</option><option>Postado</option>
+              <option>Em Trânsito</option><option>Entregue</option><option>Devolvido</option><option>Cancelado</option>
+            </select>
+          </div>
+          <div class="field"><label>&nbsp;</label><button id="reload" class="action secondary">Atualizar</button></div>
+        </div>
+      </div>
+      <br>
+      <div class="card scroll">
+        <table>
+          <thead><tr><th>ID</th><th>Destinatário</th><th>Cidade/UF</th><th>Peso decl.</th><th>Status</th><th>Rastreio</th><th>Ações</th></tr></thead>
+          <tbody id="shipments"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = {};
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { credentials: 'include', ...opts });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+function esc(s) { return (s ?? '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+document.querySelectorAll('nav button[data-p]').forEach(b => b.onclick = () => openp(b.dataset.p));
+function openp(p) {
+  document.querySelectorAll('.page').forEach(s => s.classList.remove('active'));
+  $(p).classList.add('active');
+  $('title').textContent = document.querySelector(`button[data-p="${p}"]`).textContent;
+  if (p === 'fila') loadShipments();
+}
+
+$('logoutBtn').onclick = async () => {
+  try { await api('/api/v1/auth/agencia/logout', { method: 'POST' }); } catch (e) {}
+  $('app').classList.add('hidden');
+  $('login').classList.remove('hidden');
+  $('lu').value = '';
+  $('lp').value = '';
+  $('msg').textContent = '';
+  $('lu').focus();
+};
+
+async function doLogin() {
+  try {
+    await api('/api/v1/auth/agencia/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ licensee_id: +$('lid').value, username: $('lu').value, password: $('lp').value, portal: 'operador' })
+    });
+    $('login').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    S.me = await api('/api/v1/auth/agencia/me');
+    await loadShipments();
+  } catch (e) { $('msg').textContent = e.message; }
+}
+$('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
+setupLoginForm(['lid', 'lu', 'lp'], doLogin);
+
+async function loadShipments() {
+  const status = $('statusFilter').value;
+  const rows = await api('/api/v1/agencia/shipments' + (status ? `?status=${encodeURIComponent(status)}` : ''));
+  S.shipments = rows;
+  $('shipments').innerHTML = rows.map(s => `<tr>
+    <td>${s.id}</td>
+    <td>${esc(s.recipient_name)}</td>
+    <td>${esc(s.recipient_city || '')}${s.recipient_state ? '/' + esc(s.recipient_state) : ''}</td>
+    <td>${s.weight_declared_kg ?? '—'}</td>
+    <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
+    <td>${esc(s.tracking_code || '—')}</td>
+    <td>
+      ${s.status === 'Pendente' ? `<button class="action secondary" onclick="aferir(${s.id})">Aferir</button>` : ''}
+      ${s.status === 'Aferido' ? `<button class="action secondary" onclick="postar(${s.id})">Postar</button>` : ''}
+      <button class="action secondary" onclick="evento(${s.id})">+ Evento</button>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="7" class="notice">Nenhuma encomenda nessa fila.</td></tr>';
+}
+$('statusFilter').onchange = loadShipments;
+$('reload').onclick = loadShipments;
+
+window.aferir = async (id) => {
+  const weight = prompt('Peso confirmado (kg):');
+  if (weight === null) return;
+  const price = prompt('Preço confirmado (R$):');
+  if (price === null) return;
+  try {
+    await api(`/api/v1/agencia/shipments/${id}/aferir`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weight_confirmed_kg: +weight, price_confirmed: +price })
+    });
+    await loadShipments();
+  } catch (e) { alert(e.message); }
+};
+
+window.postar = async (id) => {
+  const tracking = prompt('Código de rastreio:');
+  if (tracking === null || !tracking.trim()) return;
+  try {
+    await api(`/api/v1/agencia/shipments/${id}/postar`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tracking_code: tracking.trim() })
+    });
+    await loadShipments();
+  } catch (e) { alert(e.message); }
+};
+
+window.evento = async (id) => {
+  const status = prompt('Novo status (ex.: Em Trânsito, Entregue, Devolvido, Cancelado):');
+  if (status === null || !status.trim()) return;
+  const description = prompt('Descrição (opcional):') || null;
+  try {
+    await api(`/api/v1/agencia/shipments/${id}/eventos`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status.trim(), description })
+    });
+    await loadShipments();
+  } catch (e) { alert(e.message); }
+};
+</script>
+</body>
+</html>
