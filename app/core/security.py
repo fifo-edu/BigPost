@@ -93,12 +93,15 @@ def _b64url_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + pad)
 
 
-def create_token(subject: str, typ: str, extra: dict | None = None) -> str:
+def create_token(subject: str, typ: str, extra: dict | None = None, expire_seconds: int | None = None) -> str:
     """typ identifica qual tipo de ator o token representa ('admin',
-    'licensee_user' ou 'client') — evita que um cookie de um portal seja
-    reaproveitado como se fosse de outro."""
+    'licensee_user', 'client' ou 'support') — evita que um cookie de um
+    portal seja reaproveitado como se fosse de outro. `expire_seconds`
+    sobrescreve a validade padrão (usado pela sessão transitória do modo
+    suporte, bem mais curta que uma sessão de trabalho normal)."""
     header = {"alg": "HS256", "typ": "JWT"}
-    expire = int(time.time()) + settings.jwt_expire_minutes * 60
+    ttl = expire_seconds if expire_seconds is not None else settings.jwt_expire_minutes * 60
+    expire = int(time.time()) + ttl
     payload = {"sub": subject, "typ": typ, "exp": expire, **(extra or {})}
     header_b64 = _b64url(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _b64url(json.dumps(payload, separators=(",", ":")).encode())
@@ -137,6 +140,28 @@ def get_current_user(
     user = db.query(User).filter(User.username == payload["sub"], User.active.is_(True)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão inválida")
+    return user
+
+
+# --------------------------- "modo suporte" (Master interno entra em qualquer licenciado) ---------------------------
+def get_current_support_user(
+    session_support: str | None = Cookie(default=None), db: Session = Depends(get_db)
+) -> User:
+    """Sessão transitória (poucos minutos) usada só entre 'informei usuário/
+    senha master' e 'escolhi o licenciado' — ver app/api/auth_support.py.
+    Reconfere role=='Master' contra o banco a cada chamada (não confia só no
+    que estava no token), pra um rebaixamento/desativação feito nesse meio
+    tempo já bloquear na hora."""
+    payload = decode_token(session_support) if session_support else None
+    if not payload or payload.get("typ") != "support":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado")
+    user = (
+        db.query(User)
+        .filter(User.username == payload["sub"], User.active.is_(True), User.locked.is_(False))
+        .first()
+    )
+    if not user or user.role != "Master":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão de suporte inválida")
     return user
 
 
