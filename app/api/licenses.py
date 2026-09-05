@@ -1,13 +1,12 @@
-import secrets
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import get_current_user, require_role
-from app.models.models import Activation, License, Licensee, User
+from app.models.models import Activation, License, Licensee, Product, User
 from app.schemas.schemas import (
     LicenseGenerateRequest,
     LicenseHeartbeatRequest,
@@ -15,7 +14,7 @@ from app.schemas.schemas import (
     LicenseValidateRequest,
 )
 from app.services.audit import log_action
-from app.services.licensing import public_key_pem, sign_payload, verify_license_code
+from app.services.licensing import build_license, public_key_pem, verify_license_code
 
 router = APIRouter(prefix="/api/v1/licenses", tags=["licenses"])
 
@@ -28,8 +27,15 @@ def get_public_key():
 
 
 @router.get("", response_model=list[LicenseOut])
-def list_licenses(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.query(License).order_by(License.id.desc()).all()
+def list_licenses(
+    product_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    q = db.query(License)
+    if product_id is not None:
+        q = q.filter(License.product_id == product_id)
+    return q.order_by(License.id.desc()).all()
 
 
 @router.post("/generate", response_model=LicenseOut)
@@ -43,36 +49,19 @@ def generate_license(
     if not licensee:
         raise HTTPException(status_code=404, detail="Licenciado não encontrado")
 
-    # BigPost é produto único — por padrão a licença libera os dois módulos
-    # (Cliente e Agência); o admin pode restringir passando `features`.
-    features = payload.features or {"cliente": True, "agencia": True}
+    product = db.get(Product, payload.product_id)
+    if not product or not product.active:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
 
-    license_uid = secrets.token_hex(8).upper()
-    token_payload = {
-        "license_id": license_uid,
-        "product_code": "BIGPOST",
-        "customer_name": licensee.legal_name,
-        "tax_id": licensee.tax_id,
-        "issued_at": date.today().isoformat(),
-        "expires_at": payload.expires_at or "PERPETUA",
-        "max_users": payload.max_users or licensee.contracted_users,
-        "features": features,
-    }
-    license_code = sign_payload(token_payload)
-
-    license_row = License(
-        licensee_id=licensee.id,
-        license_code=license_code,
-        license_uid=license_uid,
-        expires_at=token_payload["expires_at"],
-        max_users=token_payload["max_users"],
-        features=features,
-        status="Ativa",
+    license_row, token_payload = build_license(
+        db,
+        licensee=licensee,
+        product=product,
+        expires_at=payload.expires_at,
+        max_users=payload.max_users,
+        features=payload.features,
         created_by=user.username,
     )
-    db.add(license_row)
-    db.commit()
-    db.refresh(license_row)
 
     log_action(
         db,
