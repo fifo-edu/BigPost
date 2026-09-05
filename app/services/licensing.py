@@ -11,10 +11,13 @@ A chave privada NUNCA deve sair desta instalação Master.
 """
 import base64
 import json
+import secrets
+from datetime import date
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 
@@ -88,3 +91,57 @@ def public_key_pem() -> str:
     ensure_keys()
     _, pub_path = _key_paths()
     return pub_path.read_text()
+
+
+def build_license(
+    db: Session,
+    *,
+    licensee,
+    product,
+    expires_at: str | None,
+    max_users: int | None,
+    features: dict | None,
+    created_by: str | None,
+):
+    """Monta, assina e persiste uma `License` para (licensee, product).
+
+    Extraído para cá para que o endpoint interno de emissão
+    (app/api/licenses.py::generate_license, usado pela equipe BigPost) e a
+    integração do Painel Master (app/api/integrations_painel_master.py,
+    usada pelo sistema externo que realmente vende/cobra a licença) gerem
+    sempre o mesmo formato de token, pela mesma lógica.
+
+    Retorna (license_row, token_payload) — o payload é devolvido também para
+    quem chama poder registrar no log de auditoria com o detalhe completo.
+    """
+    from app.models.models import License  # import local: evita import circular com app.models
+
+    features = features or {"cliente": True, "agencia": True}
+    license_uid = secrets.token_hex(8).upper()
+    token_payload = {
+        "license_id": license_uid,
+        "product_code": product.code,
+        "customer_name": licensee.legal_name,
+        "tax_id": licensee.tax_id,
+        "issued_at": date.today().isoformat(),
+        "expires_at": expires_at or "PERPETUA",
+        "max_users": max_users or licensee.contracted_users,
+        "features": features,
+    }
+    license_code = sign_payload(token_payload)
+
+    license_row = License(
+        licensee_id=licensee.id,
+        product_id=product.id,
+        license_code=license_code,
+        license_uid=license_uid,
+        expires_at=token_payload["expires_at"],
+        max_users=token_payload["max_users"],
+        features=features,
+        status="Ativa",
+        created_by=created_by,
+    )
+    db.add(license_row)
+    db.commit()
+    db.refresh(license_row)
+    return license_row, token_payload
