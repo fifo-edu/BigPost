@@ -16,9 +16,21 @@ router = APIRouter(prefix="/api/v1/licensees", tags=["licensees"])
 VALID_STATUS = ("Ativo", "Inadimplente", "Bloqueado", "Expirado")
 
 
+def _serialize(licensee: Licensee, user: User) -> LicenseeOut:
+    """`notes` é de uso interno do Master (anotação livre sobre o licenciado,
+    ex.: combinados de cobrança, histórico de problema) — Supervisor/Operador
+    continuam vendo o resto do cadastro normalmente, só esse campo é
+    zerado na resposta para eles."""
+    out = LicenseeOut.model_validate(licensee)
+    if user.role != "Master":
+        out.notes = None
+    return out
+
+
 @router.get("", response_model=list[LicenseeOut])
 def list_licensees(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.query(Licensee).order_by(Licensee.id.desc()).all()
+    rows = db.query(Licensee).order_by(Licensee.id.desc()).all()
+    return [_serialize(row, user) for row in rows]
 
 
 @router.get("/{licensee_id}", response_model=LicenseeOut)
@@ -26,7 +38,7 @@ def get_licensee(licensee_id: int, db: Session = Depends(get_db), user: User = D
     licensee = db.get(Licensee, licensee_id)
     if not licensee:
         raise HTTPException(status_code=404, detail="Licenciado não encontrado")
-    return licensee
+    return _serialize(licensee, user)
 
 
 @router.post("", response_model=LicenseeOut)
@@ -64,8 +76,17 @@ def update_licensee(
     payload: LicenseeCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role("Master")),
 ):
+    """Edição local do cadastro do licenciado (endereço, contato, faturamento,
+    observações) — pensada para o dia a dia (ex.: agência mudou de endereço,
+    trocou o contato), não para reescrever o vínculo com o Painel Master.
+    Por isso só Master pode chamar, e o frontend mantém `tax_id` (a chave que
+    o Painel Master usa para casar o licenciado numa próxima sincronização)
+    somente leitura — mudar aqui não impede tecnicamente, mas descasa do que
+    o Painel Master reconhece. Uma sincronização futura do Painel Master
+    ainda sobrescreve tudo que ele manda (é um upsert completo), então essa
+    edição local vale até a próxima sincronização de lá."""
     licensee = db.get(Licensee, licensee_id)
     if not licensee:
         raise HTTPException(status_code=404, detail="Licenciado não encontrado")
