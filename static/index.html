@@ -296,9 +296,11 @@ function render() {
         ${['Ativo','Inadimplente','Bloqueado','Expirado'].map(s => `<option ${l.status===s?'selected':''}>${s}</option>`).join('')}
       </select>
       <button class="action secondary" onclick="toggleLicenseeUsers(${l.id})">Usuários &amp; Correios</button>
+      ${ur >= rank.Master ? `<button class="action secondary" onclick="toggleLicenseeEdit(${l.id})">Editar dados</button>` : ''}
     </td>
   </tr>
-  <tr id="licdetailrow_${l.id}" class="hidden"><td colspan="6"><div class="detailwrap" id="licdetail_${l.id}"></div></td></tr>`).join('');
+  <tr id="licdetailrow_${l.id}" class="hidden"><td colspan="6"><div class="detailwrap" id="licdetail_${l.id}"></div></td></tr>
+  <tr id="liceditrow_${l.id}" class="hidden"><td colspan="6"><div class="detailwrap" id="licedit_${l.id}"></div></td></tr>`).join('');
 
   $('charges').innerHTML = S.charges.map(x => {
     const l = S.licensees.find(li => li.id === x.licensee_id) || {};
@@ -382,10 +384,112 @@ async function toggleLicenseeUsers(id) {
   const row = $('licdetailrow_' + id);
   const wasHidden = row.classList.contains('hidden');
   document.querySelectorAll('[id^="licdetailrow_"]').forEach(r => r.classList.add('hidden'));
+  document.querySelectorAll('[id^="liceditrow_"]').forEach(r => r.classList.add('hidden'));
   if (wasHidden) {
     row.classList.remove('hidden');
     await renderLicenseeUsersPanel(id);
   }
+}
+
+async function toggleLicenseeEdit(id) {
+  const row = $('liceditrow_' + id);
+  const wasHidden = row.classList.contains('hidden');
+  document.querySelectorAll('[id^="liceditrow_"]').forEach(r => r.classList.add('hidden'));
+  document.querySelectorAll('[id^="licdetailrow_"]').forEach(r => r.classList.add('hidden'));
+  if (wasHidden) {
+    row.classList.remove('hidden');
+    renderLicenseeEditPanel(id);
+  }
+}
+
+function renderLicenseeEditPanel(licenseeId) {
+  const el = $('licedit_' + licenseeId);
+  const l = S.licensees.find(x => x.id === licenseeId);
+  if (!l) { el.innerHTML = '<p class="notice">Licenciado não encontrado.</p>'; return; }
+  el.innerHTML = `
+    <div class="card">
+      <h3>Editar dados do licenciado</h3>
+      <p class="notice">Edição local — o cadastro veio do Painel Master e uma próxima sincronização de lá pode sobrescrever o que for alterado aqui. CNPJ/CPF não é editável (é a chave usada pelo Painel Master para reconhecer este licenciado).</p>
+      <div class="grid g2">
+        <div class="field"><label>CNPJ/CPF</label><input value="${esc(maskCpfCnpj(l.tax_id))}" disabled></div>
+        <div class="field"><label>Razão Social</label><input id="lcLegal_${licenseeId}" value="${esc(l.legal_name || '')}"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label>Nome Fantasia</label><input id="lcTrade_${licenseeId}" value="${esc(l.trade_name || '')}"></div>
+        <div class="field"><label>Inscrição Estadual</label><input id="lcStateReg_${licenseeId}" value="${esc(l.state_registration || '')}"></div>
+      </div>
+      <div class="section-title">Endereço</div>
+      <div class="grid g2">
+        <div class="field"><label>CEP</label><input id="lcZip_${licenseeId}" maxlength="9" placeholder="00000-000" value="${esc(l.zip_code || '')}"></div>
+        <div class="field"><label>Rua/Av</label><input id="lcStreet_${licenseeId}" value="${esc(l.address_street || '')}"></div>
+      </div>
+      <div class="grid">
+        <div class="field"><label>Número</label><input id="lcNumber_${licenseeId}" value="${esc(l.address_number || '')}"></div>
+        <div class="field"><label>Complemento (opcional)</label><input id="lcComplement_${licenseeId}" value="${esc(l.address_complement || '')}"></div>
+        <div class="field"><label>Bairro</label><input id="lcDistrict_${licenseeId}" value="${esc(l.address_district || '')}"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label>Cidade</label><input id="lcCity_${licenseeId}" value="${esc(l.city || '')}"></div>
+        <div class="field" style="max-width:120px"><label>UF</label><input id="lcState_${licenseeId}" maxlength="2" value="${esc(l.state || '')}"></div>
+      </div>
+      <div class="section-title">Contato</div>
+      <div class="grid g2">
+        <div class="field"><label>Nome do contato</label><input id="lcContactName_${licenseeId}" value="${esc(l.contact_name || '')}"></div>
+        <div class="field"><label>Cargo</label><input id="lcContactRole_${licenseeId}" value="${esc(l.contact_role || '')}"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label>E-mail de contato</label><input id="lcContactEmail_${licenseeId}" value="${esc(l.contact_email || '')}"></div>
+        <div class="field"><label>Telefone de contato</label><input id="lcContactPhone_${licenseeId}" value="${esc(l.contact_phone || '')}"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label>E-mail de cobrança</label><input id="lcBillingEmail_${licenseeId}" value="${esc(l.billing_email || '')}"></div>
+        <div class="field"><label>Telefone de cobrança</label><input id="lcBillingPhone_${licenseeId}" value="${esc(l.billing_phone || '')}"></div>
+      </div>
+      <div class="field"><label>Website</label><input id="lcWebsite_${licenseeId}" value="${esc(l.website || '')}"></div>
+      <div class="section-title">Observações (visível somente para Master)</div>
+      <div class="field"><textarea id="lcNotes_${licenseeId}" rows="3">${esc(l.notes || '')}</textarea></div>
+      <br>
+      <button class="action" onclick="saveLicenseeEdit(${licenseeId})">Salvar dados do licenciado</button>
+      <button class="action secondary" onclick="toggleLicenseeEdit(${licenseeId})">Cancelar</button>
+    </div>`;
+  attachCepAutofill('lcZip_' + licenseeId, {
+    street: 'lcStreet_' + licenseeId, district: 'lcDistrict_' + licenseeId,
+    city: 'lcCity_' + licenseeId, state: 'lcState_' + licenseeId,
+  });
+}
+
+async function saveLicenseeEdit(licenseeId) {
+  const current = S.licensees.find(x => x.id === licenseeId) || {};
+  const payload = {
+    ...current,
+    legal_name: $('lcLegal_' + licenseeId).value,
+    trade_name: $('lcTrade_' + licenseeId).value || null,
+    state_registration: $('lcStateReg_' + licenseeId).value || null,
+    zip_code: onlyDigits($('lcZip_' + licenseeId).value) || null,
+    address_street: $('lcStreet_' + licenseeId).value || null,
+    address_number: $('lcNumber_' + licenseeId).value || null,
+    address_complement: $('lcComplement_' + licenseeId).value || null,
+    address_district: $('lcDistrict_' + licenseeId).value || null,
+    city: $('lcCity_' + licenseeId).value || null,
+    state: $('lcState_' + licenseeId).value || null,
+    contact_name: $('lcContactName_' + licenseeId).value || null,
+    contact_role: $('lcContactRole_' + licenseeId).value || null,
+    contact_email: $('lcContactEmail_' + licenseeId).value || null,
+    contact_phone: $('lcContactPhone_' + licenseeId).value || null,
+    billing_email: $('lcBillingEmail_' + licenseeId).value || null,
+    billing_phone: $('lcBillingPhone_' + licenseeId).value || null,
+    website: $('lcWebsite_' + licenseeId).value || null,
+    notes: $('lcNotes_' + licenseeId).value || null,
+  };
+  delete payload.id; delete payload.status; delete payload.reported_active_users;
+  delete payload.created_at; delete payload.updated_at; delete payload.created_by;
+  try {
+    await api(`/api/v1/licensees/${licenseeId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    await loadAll();
+    alert('Dados do licenciado atualizados.');
+  } catch (e) { alert(e.message); }
 }
 
 async function renderLicenseeUsersPanel(licenseeId) {
