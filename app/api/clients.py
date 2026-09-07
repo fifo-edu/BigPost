@@ -9,7 +9,7 @@ from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import hash_password, require_licensee_role
 from app.models.models import Client, LicenseeUser
-from app.schemas.schemas import ClientCreate, ClientOut
+from app.schemas.schemas import ClientCreate, ClientOut, PasswordResetRequest
 from app.services.audit import log_action
 from app.services.support_access import SUPPORT_USERNAME
 
@@ -55,6 +55,35 @@ def create_client(
         action="CADASTRAR_CLIENTE",
         entity=f"client:{client.id}",
         after={"legal_name": client.legal_name, "tax_id": client.tax_id},
+        origin="Agência",
+        ip_address=client_ip(request),
+    )
+    return client
+
+
+@router.post("/{client_id}/reset-password", response_model=ClientOut)
+def reset_client_password(
+    client_id: int,
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: LicenseeUser = Depends(require_licensee_role("Administrador")),
+):
+    """Suporte ao botão "Esqueci minha senha" da tela de login do Cliente:
+    quem redefine é um Administrador/Master da própria agência (o cliente
+    pertence a ela), pela tela de Clientes — sem precisar de e-mail/SMTP."""
+    client = db.query(Client).filter(Client.id == client_id, Client.licensee_id == user.licensee_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    client.password_hash = hash_password(payload.new_password)
+    db.commit()
+    db.refresh(client)
+    log_action(
+        db,
+        username=user.username,
+        role=user.role,
+        action="ZERAR_SENHA_CLIENTE",
+        entity=f"client:{client.id}",
         origin="Agência",
         ip_address=client_ip(request),
     )
