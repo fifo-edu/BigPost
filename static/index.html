@@ -76,6 +76,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     <br>
     <button id="enter" type="submit" class="action">Entrar</button>
     <p id="msg" style="color:#a53030"></p>
+    <p class="notice"><a href="#" onclick="showForgotPassword(); return false;">Esqueci minha senha</a></p>
   </form>
 </div>
 
@@ -373,6 +374,15 @@ async function doLogin() {
 }
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
 setupLoginForm(['lu', 'lp'], doLogin);
+
+function showForgotPassword() {
+  alert(
+    'Esqueci minha senha\n\n' +
+    'Peça a outro usuário Master para redefinir sua senha em Administração → Usuários.\n\n' +
+    'Se você é o único Master cadastrado, peça a quem cuida tecnicamente do sistema BigPost ' +
+    'para fazer essa redefinição direto no servidor.'
+  );
+}
 
 // --------------------------- Licenciados ---------------------------
 async function setStatus(id, status) {
