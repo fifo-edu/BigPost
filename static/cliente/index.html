@@ -62,6 +62,7 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
     <br>
     <button id="enter" type="submit" class="action">Entrar</button>
     <p id="msg" style="color:#a53030"></p>
+    <p class="notice"><a href="#" onclick="showForgotPassword(); return false;">Esqueci minha senha</a></p>
     <p class="notice"><a href="#" id="supportToggle">Sou da equipe BigPost (suporte)</a></p>
     <p class="notice">Já usa integração via API key? Não precisa logar aqui — veja o cabeçalho <code>Authorization: Bearer &lt;api_key&gt;</code> na documentação.</p>
     <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a></p>
@@ -237,6 +238,14 @@ async function doLogin() {
 }
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
 setupLoginForm(['lid', 'lu', 'lp'], doLogin);
+
+function showForgotPassword() {
+  alert(
+    'Esqueci minha senha\n\n' +
+    'Peça a um Administrador ou Master da sua agência para redefinir sua senha ' +
+    '(tela Clientes, botão "Zerar senha").'
+  );
+}
 
 // --------------------------- Modo suporte (usuário master entra em qualquer licenciado) ---------------------------
 async function doSupportLogin() {
