@@ -59,6 +59,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     <br>
     <button id="enter" type="submit" class="action">Entrar</button>
     <p id="msg" style="color:#a53030"></p>
+    <p class="notice"><a href="#" onclick="showForgotPassword(); return false;">Esqueci minha senha</a></p>
     <p class="notice"><a href="#" id="supportToggle">Sou da equipe BigPost (suporte)</a></p>
     <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/operador/">/operador</a> · <a href="/cliente/">/cliente</a></p>
   </form>
@@ -192,6 +193,14 @@ async function doLogin() {
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
 setupLoginForm(['lid', 'lu', 'lp'], doLogin);
 
+function showForgotPassword() {
+  alert(
+    'Esqueci minha senha\n\n' +
+    'A redefinição de senha da equipe da agência é feita pela equipe BigPost (suporte técnico) — ' +
+    'entre em contato informando o nome da agência e o seu usuário para pedir a redefinição.'
+  );
+}
+
 // --------------------------- Modo suporte (usuário master entra em qualquer licenciado) ---------------------------
 async function doSupportLogin() {
   try {
@@ -238,9 +247,23 @@ async function loadClients() {
     <td>${esc(maskCpfCnpj(c.tax_id))}</td>
     <td>${esc(c.username)}</td>
     <td>${c.active ? 'Ativo' : 'Inativo'}</td>
-    <td>${c.active ? `<button class="action secondary" onclick="deactivateClient(${c.id})">Desativar</button>` : ''}</td>
+    <td>
+      <button class="action secondary" onclick="resetClientPassword(${c.id})">Zerar senha</button>
+      ${c.active ? `<button class="action secondary" onclick="deactivateClient(${c.id})">Desativar</button>` : ''}
+    </td>
   </tr>`).join('') || '<tr><td colspan="5" class="notice">Nenhum cliente cadastrado ainda.</td></tr>';
 }
+
+window.resetClientPassword = async (id) => {
+  const newPassword = prompt('Nova senha para este cliente (mínimo 6 caracteres):');
+  if (!newPassword) return;
+  try {
+    await api(`/api/v1/agencia/clients/${id}/reset-password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ new_password: newPassword }),
+    });
+    alert('Senha do cliente redefinida.');
+  } catch (e) { alert(e.message); }
+};
 
 window.deactivateClient = async (id) => {
   try { await api(`/api/v1/agencia/clients/${id}/deactivate`, { method: 'POST' }); await loadClients(); }
