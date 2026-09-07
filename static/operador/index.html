@@ -59,6 +59,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     <br>
     <button id="enter" type="submit" class="action">Entrar</button>
     <p id="msg" style="color:#a53030"></p>
+    <p class="notice"><a href="#" onclick="showForgotPassword(); return false;">Esqueci minha senha</a></p>
     <p class="notice"><a href="#" id="supportToggle">Sou da equipe BigPost (suporte)</a></p>
     <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a> · <a href="/cliente/">/cliente</a></p>
   </form>
@@ -170,6 +171,14 @@ async function doLogin() {
 }
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
 setupLoginForm(['lid', 'lu', 'lp'], doLogin);
+
+function showForgotPassword() {
+  alert(
+    'Esqueci minha senha\n\n' +
+    'A redefinição de senha da equipe operacional é feita pela equipe BigPost (suporte técnico) — ' +
+    'entre em contato informando o nome da agência e o seu usuário para pedir a redefinição.'
+  );
+}
 
 // --------------------------- Modo suporte (usuário master entra em qualquer licenciado) ---------------------------
 async function doSupportLogin() {
