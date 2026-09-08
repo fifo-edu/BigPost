@@ -1,0 +1,43 @@
+# Blueprint do Render para o BigPost — cria o Web Service (a partir do
+# Dockerfile já existente na raiz do projeto, que roda "alembic upgrade head"
+# antes de subir o uvicorn) e um banco Postgres gerenciado, já conectados.
+#
+# BOOTSTRAP_MASTER_PASSWORD e PAINEL_MASTER_API_KEY ficam com "sync: false"
+# de propósito — não vão pro repositório; você define o valor deles uma vez
+# direto no painel do Render (ou eu configuro, se você me passar os valores
+# aqui na conversa).
+databases:
+  - name: bigpost-db
+    plan: starter
+    databaseName: bigpost
+    user: bigpost
+
+services:
+  - type: web
+    name: bigpost
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bigpost-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRE_MINUTES
+        value: "480"
+      - key: BOOTSTRAP_MASTER_USERNAME
+        value: Fifo
+      - key: BOOTSTRAP_MASTER_PASSWORD
+        sync: false
+      - key: DATA_DIR
+        value: /app/data
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: PAINEL_MASTER_API_KEY
+        sync: false
+    disk:
+      name: bigpost-data
+      mountPath: /app/data
+      sizeGB: 1
