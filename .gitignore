@@ -4,3 +4,7 @@ __pycache__/
 data/
 *.db
 .venv/
+
+# Documentos/arquivos pessoais que não são código (ex.: notas fiscais soltas
+# na raiz do projeto) — nunca devem ir pro repositório.
+*.pdf
