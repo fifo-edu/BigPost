@@ -241,6 +241,9 @@ class ClientCorreiosCredentialUpsert(BaseModel):
     token: str | None = None
     postal_card: str
     contract_number: str
+    # Diretoria Regional (DR) — exigida pela autenticação do CWS junto do
+    # cartão de postagem/contrato (ver app/services/correios_cws.py).
+    dr: int | None = None
 
 
 class ClientCorreiosCredentialOut(BaseModel):
@@ -250,6 +253,7 @@ class ClientCorreiosCredentialOut(BaseModel):
     correios_username: str
     postal_card: str
     contract_number: str
+    dr: int | None
     has_token: bool
     active: bool
     last_validated_at: datetime | None
