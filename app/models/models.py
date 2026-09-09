@@ -178,9 +178,19 @@ class ClientCorreiosCredential(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     licensee_id: Mapped[int] = mapped_column(ForeignKey("licensees.id"), nullable=False, unique=True)
     correios_username: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Guardado criptografado (app/services/crypto.py): é o "código de acesso"
+    # usado com Basic Auth para autenticar no CWS (não o token Bearer de
+    # sessão, que é de curta duração e fica só em cache em memória — ver
+    # app/services/correios_cws.py).
     token_encrypted: Mapped[str | None] = mapped_column(Text)
     postal_card: Mapped[str] = mapped_column(String(20), nullable=False)  # Cartão de postagem
     contract_number: Mapped[str] = mapped_column(String(20), nullable=False)  # Número do contrato
+    # Diretoria Regional (DR) dos Correios associada ao cartão de
+    # postagem/contrato — exigida pela API de autenticação do CWS junto do
+    # número do cartão/contrato (POST /v1/autentica/cartaopostagem e
+    # /v1/autentica/contrato). Preencher com o código numérico informado
+    # pelos Correios no momento da contratação.
+    dr: Mapped[int | None] = mapped_column(Integer)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_validated_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
