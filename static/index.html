@@ -550,16 +550,19 @@ async function renderLicenseeUsersPanel(licenseeId) {
       <br><button class="action secondary" onclick="saveAgfCred(${licenseeId})">Salvar credencial Correios Atende</button>
     </div>
     <div class="card">
-      <h3>Credenciais BigPost Cliente — Correios (contrato)</h3>
-      <p class="notice">Usuário, token, cartão de postagem e contrato dos Correios, usados pelo módulo BigPost Cliente — diferente da credencial Correios Atende acima.</p>
-      <p class="notice">${clienteCred ? `Cadastrada: usuário ${esc(clienteCred.correios_username)}, cartão ${esc(clienteCred.postal_card)}, contrato ${esc(clienteCred.contract_number)}${clienteCred.last_validated_at ? ', última validação em ' + formatDateTimeBR(clienteCred.last_validated_at) : ' (ainda não validada)'}.` : 'Nenhuma credencial cadastrada ainda.'}</p>
+      <h3>Credenciais BigPost Cliente — Correios CWS (contrato)</h3>
+      <p class="notice">Usuário, código de acesso, cartão de postagem, contrato e Diretoria Regional (DR) do CWS (Correios Web Services) — usados pelo módulo BigPost Cliente para autenticar e postar de verdade. Diferente da credencial Correios Atende acima.</p>
+      <p class="notice">${clienteCred ? `Cadastrada: usuário ${esc(clienteCred.correios_username)}, cartão ${esc(clienteCred.postal_card)}, contrato ${esc(clienteCred.contract_number)}, DR ${clienteCred.dr ?? '(não informada)'}${clienteCred.last_validated_at ? ', última validação em ' + formatDateTimeBR(clienteCred.last_validated_at) : ' (ainda não validada)'}.` : 'Nenhuma credencial cadastrada ainda.'}</p>
       <div class="grid g2">
-        <div class="field"><label>Usuário Correios</label><input id="clienteUser_${licenseeId}" value="${esc(clienteCred?.correios_username || '')}"></div>
-        <div class="field"><label>Token</label><input id="clienteToken_${licenseeId}" type="password"></div>
+        <div class="field"><label>Usuário CWS</label><input id="clienteUser_${licenseeId}" value="${esc(clienteCred?.correios_username || '')}"></div>
+        <div class="field"><label>Código de acesso (CWS)</label><input id="clienteToken_${licenseeId}" type="password" placeholder="${clienteCred ? '••••••••' : ''}"></div>
       </div>
       <div class="grid g2">
         <div class="field"><label>Cartão de postagem</label><input id="clienteCard_${licenseeId}" value="${esc(clienteCred?.postal_card || '')}"></div>
         <div class="field"><label>Número do contrato</label><input id="clienteContract_${licenseeId}" value="${esc(clienteCred?.contract_number || '')}"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label>Diretoria Regional (DR)</label><input id="clienteDr_${licenseeId}" type="number" min="0" placeholder="ex.: 74" value="${clienteCred?.dr ?? 74}"></div>
       </div>
       <br><button class="action secondary" onclick="saveClienteCred(${licenseeId})">Salvar credencial BigPost Cliente</button>
     </div>`;
@@ -582,6 +585,7 @@ async function saveAgfCred(licenseeId) {
 }
 
 async function saveClienteCred(licenseeId) {
+  const drRaw = $('clienteDr_' + licenseeId).value;
   try {
     await api(`/api/v1/licensees/${licenseeId}/client-correios-credential`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -590,6 +594,7 @@ async function saveClienteCred(licenseeId) {
         token: $('clienteToken_' + licenseeId).value || null,
         postal_card: $('clienteCard_' + licenseeId).value,
         contract_number: $('clienteContract_' + licenseeId).value,
+        dr: drRaw === '' ? null : parseInt(drRaw, 10),
       }),
     });
     await renderLicenseeUsersPanel(licenseeId);
