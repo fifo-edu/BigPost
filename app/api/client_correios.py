@@ -28,6 +28,7 @@ def _to_out(cred: ClientCorreiosCredential) -> ClientCorreiosCredentialOut:
         correios_username=cred.correios_username,
         postal_card=cred.postal_card,
         contract_number=cred.contract_number,
+        dr=cred.dr,
         has_token=bool(cred.token_encrypted),
         active=cred.active,
         last_validated_at=cred.last_validated_at,
@@ -65,7 +66,14 @@ def upsert_credential(
     cred.correios_username = payload.correios_username
     cred.postal_card = payload.postal_card
     cred.contract_number = payload.contract_number
-    cred.token_encrypted = encrypt(payload.token) if payload.token else None
+    cred.dr = payload.dr
+    if payload.token:
+        cred.token_encrypted = encrypt(payload.token)
+    elif is_new:
+        cred.token_encrypted = None
+    # Se for edição (não novo) e o campo vier vazio, mantém o código de acesso
+    # já salvo — o formulário do Admin não reexibe o valor atual (é sensível),
+    # então um campo em branco aqui é "não mudei isso agora", não "apagar".
     cred.active = True
     cred.updated_at = datetime.utcnow()
     cred.created_by = cred.created_by or user.username
@@ -78,7 +86,7 @@ def upsert_credential(
         role=user.role,
         action="CADASTRAR_CREDENCIAL_CLIENTE_CORREIOS" if is_new else "ATUALIZAR_CREDENCIAL_CLIENTE_CORREIOS",
         entity=f"licensee:{licensee_id}",
-        after={"correios_username": cred.correios_username, "postal_card": cred.postal_card, "contract_number": cred.contract_number},
+        after={"correios_username": cred.correios_username, "postal_card": cred.postal_card, "contract_number": cred.contract_number, "dr": cred.dr},
         ip_address=client_ip(request),
     )
     return _to_out(cred)
