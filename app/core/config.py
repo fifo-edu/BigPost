@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     # app/api/integrations_painel_master.py.
     painel_master_api_key: str = ""
 
+    # Base da API oficial dos Correios para sistemas integrados (CWS —
+    # Correios Web Services), usada pela aferição/postagem do módulo Operador
+    # (ver app/services/correios_cws.py). Comece em homologação e só troque
+    # para produção depois de validar o fluxo — pré-postagem em produção gera
+    # rastreio/etiqueta reais.
+    #   Homologação (padrão): https://cwshom.correios.com.br
+    #   Produção:              https://cws.correios.com.br
+    correios_cws_base_url: str = "https://cwshom.correios.com.br"
+
     @property
     def data_path(self) -> Path:
         p = Path(self.data_dir)
