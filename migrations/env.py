@@ -4,11 +4,14 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
-from app.core.db import Base
+from app.core.db import Base, normalize_database_url
 from app.models import models  # noqa: F401  garante que todos os modelos sejam registrados
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# normalize_database_url: mesma correção de app/core/db.py — sem ela, uma
+# DATABASE_URL sem driver explícito (caso do Render) faz o Alembic tentar
+# psycopg2 (não instalado) em vez do psycopg v3 que este projeto usa.
+config.set_main_option("sqlalchemy.url", normalize_database_url(settings.database_url))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
