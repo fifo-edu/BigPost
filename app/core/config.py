@@ -22,6 +22,12 @@ class Settings(BaseSettings):
 
     bootstrap_master_username: str = "Fifo"
     bootstrap_master_password: str = "troque-esta-senha"
+    # Opcional — se vazio, a conta Master de bootstrap fica sem e-mail (ainda
+    # loga normalmente pelo username, já que o login aceita username OU
+    # e-mail — ver app/api/auth.py). Preencher deixa essa conta também apta
+    # a usar "Esqueci minha senha"/redefinição por e-mail, igual às contas
+    # novas (que desde 2026-09-10 são sempre cadastradas por e-mail).
+    bootstrap_master_email: str = ""
 
     data_dir: str = "./data"
 
@@ -44,6 +50,27 @@ class Settings(BaseSettings):
     #   Homologação (padrão): https://cwshom.correios.com.br
     #   Produção:              https://cws.correios.com.br
     correios_cws_base_url: str = "https://cwshom.correios.com.br"
+
+    # SMTP para o e-mail automático que o Portal SAC dispara pro cliente
+    # quando uma encomenda cai na fila de erro (ver app/services/email.py).
+    # smtp_host vazio = envio de e-mail desligado (a encomenda ainda vai pra
+    # fila do SAC normalmente — só o aviso por e-mail não sai — e nada
+    # quebra: nunca lance exceção por falta de config aqui, mesmo padrão do
+    # painel_master_api_key acima).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+    smtp_from_email: str = ""
+    smtp_from_name: str = "BigPost"
+
+    # URL pública (raiz, sem barra no fim) onde o BigPost responde — usada só
+    # pra montar o link de "definir senha" (convite/redefinição) mandado por
+    # e-mail, ex.: "https://bigpost.onrender.com". Vazio = o e-mail (quando
+    # sai) traz o token em texto puro com instrução manual em vez de link
+    # clicável — nunca quebra, só fica menos prático até isto ser preenchido.
+    app_public_base_url: str = ""
 
     @property
     def data_path(self) -> Path:

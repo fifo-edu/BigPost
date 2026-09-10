@@ -68,22 +68,24 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
 <div id="login" class="login">
   <form id="loginForm" class="box" autocomplete="on">
     <h2>BigPost — Administração</h2>
-    <img class="login-logo" src="/agf_ozanan_logo.png" alt="AGF Ozanan">
+    <img class="login-logo" src="/bigpost_logo.png" alt="BigPost">
     <p class="notice">Operação e cobrança das agências licenciadas. Cadastro de licenciado e emissão de licença ficam no Painel Master.</p>
     <p class="notice">Procurando o portal da agência ou do cliente? <a href="/agencia/">/agencia</a> · <a href="/cliente/">/cliente</a></p>
-    <div class="field"><label>Usuário</label><input id="lu" name="username" autocomplete="username"></div>
+    <div class="field"><label>E-mail</label><input id="lu" name="username" type="email" autocomplete="username"></div>
     <div class="field"><label>Senha</label><input id="lp" name="password" type="password" autocomplete="current-password"></div>
     <br>
-    <button id="enter" type="submit" class="action">Entrar</button>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <button id="enter" type="submit" class="action">Entrar</button>
+      <a href="#" onclick="showForgotPassword(); return false;" class="notice">Esqueci minha senha</a>
+    </div>
     <p id="msg" style="color:#a53030"></p>
-    <p class="notice"><a href="#" onclick="showForgotPassword(); return false;">Esqueci minha senha</a></p>
   </form>
 </div>
 
 <div id="app" class="app hidden">
   <aside>
     <div class="brand-title">
-      <img class="brand-side" src="/agf_ozanan_logo.png" alt="AGF Ozanan">
+      <img class="brand-side" src="/bigpost_logo.png" alt="BigPost">
       <h2>BigPost<br><small style="font-weight:normal;opacity:.7">Administração</small></h2>
     </div>
     <nav>
@@ -202,10 +204,10 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     <section id="usuarios" class="page">
       <div class="card">
         <h3>Usuários</h3>
-        <p class="notice">Somente Master pode cadastrar. Supervisor pode visualizar. Operador não acessa esta tela.</p>
+        <p class="notice">Somente Master pode cadastrar. Supervisor pode visualizar. Operador não acessa esta tela. Cadastro é feito só por e-mail — a pessoa recebe um convite para definir a própria senha.</p>
         <div class="grid">
-          <div class="field"><label>Usuário</label><input id="newUser"></div>
-          <div class="field"><label>Senha</label><input id="newPass" type="password"></div>
+          <div class="field"><label>E-mail</label><input id="newUser" type="email"></div>
+          <div class="field"><label>Nome completo</label><input id="newFullName"></div>
           <div class="field"><label>Perfil</label><select id="newRole"><option>Operador</option><option>Supervisor</option><option>Master</option></select></div>
         </div>
         <br><button id="saveUser" class="action">Cadastrar usuário</button>
@@ -232,7 +234,6 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
       <label>Licenciado</label><select id="upLicensee"></select>
     </div>
     <div class="field"><label>Usuário</label><select id="upUser"></select></div>
-    <div class="field hidden" id="upPasswordField"><label>Nova senha</label><input id="upPassword" type="password"></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="action" id="upConfirm">Confirmar</button>
       <button class="action secondary" id="upCancel">Cancelar</button>
@@ -375,13 +376,16 @@ async function doLogin() {
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
 setupLoginForm(['lu', 'lp'], doLogin);
 
-function showForgotPassword() {
-  alert(
-    'Esqueci minha senha\n\n' +
-    'Peça a outro usuário Master para redefinir sua senha em Administração → Usuários.\n\n' +
-    'Se você é o único Master cadastrado, peça a quem cuida tecnicamente do sistema BigPost ' +
-    'para fazer essa redefinição direto no servidor.'
-  );
+async function showForgotPassword() {
+  const email = ($('lu').value || '').trim() || prompt('Informe o e-mail cadastrado para receber o link de redefinição:');
+  if (!email) return;
+  try {
+    await api('/api/v1/auth/password/forgot', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actor_type: 'user', email }),
+    });
+  } catch (e) { /* segue igual — a resposta é sempre genérica, nunca revela se o e-mail existe */ }
+  alert('Se esse e-mail tiver uma conta, enviamos as instruções de redefinição de senha para ele.');
 }
 
 // --------------------------- Licenciados ---------------------------
@@ -514,15 +518,15 @@ async function renderLicenseeUsersPanel(licenseeId) {
   el.innerHTML = `
     <div class="card">
       <h3>Usuários da agência</h3>
+      <p class="notice">Cadastro é feito só por e-mail — a pessoa recebe um convite para definir a própria senha.</p>
       <div class="grid">
-        <div class="field"><label>Usuário</label><input id="agUserUsername_${licenseeId}"></div>
+        <div class="field"><label>E-mail</label><input id="agUserUsername_${licenseeId}" type="email"></div>
         <div class="field"><label>Nome completo</label><input id="agUserFullName_${licenseeId}"></div>
-        <div class="field"><label>Senha</label><input id="agUserPassword_${licenseeId}" type="password"></div>
       </div>
       <div class="field"><label>Perfil</label>
         <select id="agUserRole_${licenseeId}">
           <option>Master</option><option>Administrador</option><option>Financeiro</option>
-          <option selected>Operador de Caixa</option><option>Expedição</option>
+          <option selected>Operador de Caixa</option><option>Expedição</option><option>SAC</option>
         </select>
       </div>
       <br><button class="action" onclick="saveAgencyUser(${licenseeId})">Cadastrar usuário</button>
@@ -604,16 +608,17 @@ async function saveClienteCred(licenseeId) {
 
 async function saveAgencyUser(licenseeId) {
   try {
-    await api(`/api/v1/licensees/${licenseeId}/users`, {
+    const out = await api(`/api/v1/licensees/${licenseeId}/users`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: $('agUserUsername_' + licenseeId).value,
+        email: $('agUserUsername_' + licenseeId).value,
         full_name: $('agUserFullName_' + licenseeId).value || null,
-        password: $('agUserPassword_' + licenseeId).value,
         role: $('agUserRole_' + licenseeId).value,
       }),
     });
     await renderLicenseeUsersPanel(licenseeId);
+    if (out.invite_emailed) alert('Usuário cadastrado. Convite enviado por e-mail.');
+    else alert('Usuário cadastrado. Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.invite_link);
   } catch (e) { alert(e.message); }
 }
 
@@ -677,11 +682,16 @@ liveMask($('bbBeneficiaryTax'), maskCNPJ);
 // --------------------------- Usuários (internos) ---------------------------
 $('saveUser').onclick = async () => {
   try {
-    await api('/api/v1/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: $('newUser').value, password: $('newPass').value, role: $('newRole').value }) });
+    const out = await api('/api/v1/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('newUser').value, full_name: $('newFullName').value || null, role: $('newRole').value }),
+    });
     $('newUser').value = '';
-    $('newPass').value = '';
+    $('newFullName').value = '';
     $('newRole').selectedIndex = 0;
     await loadAll();
+    if (out.invite_emailed) alert('Usuário cadastrado. Convite enviado por e-mail.');
+    else alert('Usuário cadastrado. Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.invite_link);
   } catch (e) { alert(e.message); }
 };
 
@@ -750,8 +760,6 @@ function openUserPicker(action) {
   $('upTitle').textContent = action === 'unlock' ? 'Desbloquear usuário' : 'Zerar senha do usuário';
   $('upType').value = 'interno';
   $('upMsg').textContent = '';
-  $('upPasswordField').classList.toggle('hidden', action !== 'reset-password');
-  $('upPassword').value = '';
   updateUserPickerType();
   $('userPickerModal').classList.remove('hidden');
 }
@@ -784,7 +792,6 @@ $('upConfirm').onclick = async () => {
   const type = $('upType').value;
   const userId = $('upUser').value;
   if (!userId) { $('upMsg').textContent = 'Escolha um usuário.'; return; }
-  if (upAction === 'reset-password' && $('upPassword').value.length < 6) { $('upMsg').textContent = 'Senha deve ter ao menos 6 caracteres.'; return; }
   try {
     let url;
     const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
@@ -794,11 +801,12 @@ $('upConfirm').onclick = async () => {
       const licenseeId = $('upLicensee').value;
       url = `/api/v1/licensees/${licenseeId}/users/${userId}/${upAction}`;
     }
-    if (upAction === 'reset-password') opts.body = JSON.stringify({ new_password: $('upPassword').value });
-    await api(url, opts);
+    const out = await api(url, opts);
     $('userPickerModal').classList.add('hidden');
     await loadAll();
-    alert(upAction === 'unlock' ? 'Usuário desbloqueado.' : 'Senha redefinida.');
+    if (upAction === 'unlock') alert('Usuário desbloqueado.');
+    else if (out.emailed) alert('Link de redefinição enviado por e-mail.');
+    else alert('Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.link);
   } catch (e) { $('upMsg').textContent = e.message; }
 };
 </script>

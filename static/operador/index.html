@@ -51,17 +51,19 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
 <div id="login" class="login">
   <form id="loginForm" class="box" autocomplete="on">
     <h2>BigPost — Operador</h2>
-    <img class="login-logo" src="/agf_ozanan_logo.png" alt="AGF Ozanan">
+    <img class="login-logo" src="/bigpost_logo.png" alt="BigPost">
     <p class="notice">Login da equipe operacional da agência (Operador de Caixa, Expedição) — aferição e postagem.</p>
-    <div class="field" id="lidField"><label>Código do licenciado (ID)</label><input id="lid" type="number"></div>
-    <div class="field"><label>Usuário</label><input id="lu" name="username" autocomplete="username"></div>
+    <div class="field"><label>E-mail</label><input id="lu" name="username" type="email" autocomplete="username"></div>
+    <div class="field hidden" id="lidField"><label>Agência</label><select id="lid"></select></div>
     <div class="field"><label>Senha</label><input id="lp" name="password" type="password" autocomplete="current-password"></div>
     <br>
-    <button id="enter" type="submit" class="action">Entrar</button>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <button id="enter" type="submit" class="action">Entrar</button>
+      <a href="#" onclick="showForgotPassword(); return false;" class="notice">Esqueci minha senha</a>
+    </div>
     <p id="msg" style="color:#a53030"></p>
-    <p class="notice"><a href="#" onclick="showForgotPassword(); return false;">Esqueci minha senha</a></p>
     <p class="notice"><a href="#" id="supportToggle">Sou da equipe BigPost (suporte)</a></p>
-    <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a> · <a href="/cliente/">/cliente</a></p>
+    <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a> · <a href="/sac/">/sac</a> · <a href="/cliente/">/cliente</a></p>
   </form>
   <div id="supportPicker" class="box hidden">
     <h2>Escolher licenciado</h2>
@@ -77,7 +79,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
 <div id="app" class="app hidden">
   <aside>
     <div class="brand-title">
-      <img class="brand-side" src="/agf_ozanan_logo.png" alt="AGF Ozanan">
+      <img class="brand-side" src="/bigpost_logo.png" alt="BigPost">
       <h2>BigPost<br><small style="font-weight:normal;opacity:.7">Operador</small></h2>
     </div>
     <nav>
@@ -148,20 +150,33 @@ $('logoutBtn').onclick = async () => {
 };
 
 let supportMode = false;
+let loginState = { awaitingPick: false };
 $('supportToggle').onclick = (ev) => {
   ev.preventDefault();
   supportMode = !supportMode;
-  $('lidField').classList.toggle('hidden', supportMode);
+  loginState.awaitingPick = false;
+  $('lidField').classList.add('hidden');
   $('supportToggle').textContent = supportMode ? 'Voltar ao login normal' : 'Sou da equipe BigPost (suporte)';
   $('msg').textContent = '';
 };
+$('lu').addEventListener('input', () => {
+  if (loginState.awaitingPick) { loginState.awaitingPick = false; $('lidField').classList.add('hidden'); $('msg').textContent = ''; }
+});
 
 async function doLogin() {
   if (supportMode) return doSupportLogin();
+  const licenseeId = await resolveLicenseeId({
+    lookupUrl: '/api/v1/auth/agencia/lookup-licensee',
+    lookupBody: { email: ($('lu').value || '').trim(), portal: 'operador' },
+    state: loginState,
+    pickerFieldId: 'lidField', pickerSelectId: 'lid',
+    onError: (msg) => { $('msg').textContent = msg; },
+  });
+  if (licenseeId == null) return;
   try {
     await api('/api/v1/auth/agencia/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ licensee_id: +$('lid').value, username: $('lu').value, password: $('lp').value, portal: 'operador' })
+      body: JSON.stringify({ licensee_id: licenseeId, username: $('lu').value, password: $('lp').value, portal: 'operador' })
     });
     $('login').classList.add('hidden');
     $('app').classList.remove('hidden');
@@ -170,14 +185,17 @@ async function doLogin() {
   } catch (e) { $('msg').textContent = e.message; }
 }
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
-setupLoginForm(['lid', 'lu', 'lp'], doLogin);
+setupLoginForm(['lu', 'lp'], doLogin);
 
-function showForgotPassword() {
-  alert(
-    'Esqueci minha senha\n\n' +
-    'A redefinição de senha da equipe operacional é feita pela equipe BigPost (suporte técnico) — ' +
-    'entre em contato informando o nome da agência e o seu usuário para pedir a redefinição.'
-  );
+async function showForgotPassword() {
+  const email = ($('lu').value || '').trim() || prompt('Informe o e-mail cadastrado para receber o link de redefinição:');
+  if (!email) return;
+  const matches = await lookupLicenseeMatches('/api/v1/auth/agencia/lookup-licensee', { email, portal: 'operador' });
+  await Promise.all(matches.map(m => api('/api/v1/auth/password/forgot', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actor_type: 'licensee_user', email, licensee_id: m.id }),
+  }).catch(() => {})));
+  alert('Se esse e-mail tiver uma conta, enviamos as instruções de redefinição de senha para ele.');
 }
 
 // --------------------------- Modo suporte (usuário master entra em qualquer licenciado) ---------------------------
@@ -214,7 +232,8 @@ $('supportCancel').onclick = async () => {
   $('supportPicker').classList.add('hidden');
   $('loginForm').classList.remove('hidden');
   supportMode = false;
-  $('lidField').classList.remove('hidden');
+  loginState.awaitingPick = false;
+  $('lidField').classList.add('hidden');
   $('supportToggle').textContent = 'Sou da equipe BigPost (suporte)';
 };
 

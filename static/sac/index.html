@@ -2,9 +2,9 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>BigPost — Agência</title>
+<title>BigPost — SAC</title>
 <style>
-:root{--bg:#f4f6f8;--ink:#173d2c;--line:#e5e8eb;--muted:#667684;--accent:#173d2c}
+:root{--bg:#f4f6f8;--ink:#5c1a1a;--line:#e5e8eb;--muted:#667684;--accent:#5c1a1a}
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.4 Arial,sans-serif;background:var(--bg);color:var(--ink)}
 .hidden{display:none!important}
@@ -18,7 +18,7 @@ aside h2{padding:20px;font-size:16px}
 .brand-side{display:block;width:150px;max-width:80%;height:auto;max-height:70px;object-fit:contain;margin:0 auto;background:#fff;border-radius:8px;padding:5px}
 .login-logo{display:block;width:min(260px,72vw);height:auto;max-height:120px;object-fit:contain;margin:0 auto 14px}
 nav button{width:100%;padding:12px 18px;text-align:left;border:0;background:transparent;color:#fff;cursor:pointer;font-size:13px}
-nav button:hover{background:#20573f}
+nav button:hover{background:#7a2b2b}
 nav button.navlogout{border-top:1px solid rgba(255,255,255,.15);margin-top:10px;padding-top:14px;opacity:.85}
 nav button.navlogout:hover{opacity:1;background:#5a2626}
 main{padding:24px;max-width:1200px}
@@ -33,16 +33,13 @@ h3{margin-top:0}
 input,select,textarea{padding:9px;border:1px solid #ccd4dc;border-radius:7px;font:inherit}
 .action{padding:8px 14px;border:0;border-radius:7px;background:var(--ink);color:#fff;cursor:pointer;font-size:13px}
 .action.secondary{background:#fff;color:var(--ink);border:1px solid #ccd4dc}
-table{width:100%;border-collapse:collapse;min-width:700px}
+table{width:100%;border-collapse:collapse;min-width:760px}
 th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
 .scroll{overflow:auto}
 .notice{color:var(--muted);font-size:12px}
 .badge{padding:2px 8px;border-radius:20px;font-size:11px}
+.badge.Erro{background:#fbe4e4;color:#a53030}
 .badge.Pendente{background:#fdf0e0;color:#9a5b00}
-.badge.Aferido{background:#e6eefc;color:#1c4fa0}
-.badge.Postado,.badge.Entregue{background:#e2f5e9;color:#187a3f}
-.badge.Cancelado,.badge.Devolvido{background:#fbe4e4;color:#a53030}
-.badge[class*="Trânsito"]{background:#eef0fb;color:#4b3fa0}
 </style>
 </head>
 <body>
@@ -50,9 +47,9 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
 
 <div id="login" class="login">
   <form id="loginForm" class="box" autocomplete="on">
-    <h2>BigPost — Agência</h2>
+    <h2>BigPost — SAC</h2>
     <img class="login-logo" src="/bigpost_logo.png" alt="BigPost">
-    <p class="notice">Login da equipe de gestão da agência (Master, Administrador, Financeiro) — relação com Cliente e Operador, e cobrança.</p>
+    <p class="notice">Login da equipe SAC — fila de encomendas com erro e acompanhamento de recriação de etiquetas.</p>
     <div class="field"><label>E-mail</label><input id="lu" name="username" type="email" autocomplete="username"></div>
     <div class="field hidden" id="lidField"><label>Agência</label><select id="lid"></select></div>
     <div class="field"><label>Senha</label><input id="lp" name="password" type="password" autocomplete="current-password"></div>
@@ -63,7 +60,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     </div>
     <p id="msg" style="color:#a53030"></p>
     <p class="notice"><a href="#" id="supportToggle">Sou da equipe BigPost (suporte)</a></p>
-    <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/operador/">/operador</a> · <a href="/sac/">/sac</a> · <a href="/cliente/">/cliente</a></p>
+    <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a> · <a href="/operador/">/operador</a> · <a href="/cliente/">/cliente</a></p>
   </form>
   <div id="supportPicker" class="box hidden">
     <h2>Escolher licenciado</h2>
@@ -80,52 +77,57 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
   <aside>
     <div class="brand-title">
       <img class="brand-side" src="/bigpost_logo.png" alt="BigPost">
-      <h2>BigPost<br><small style="font-weight:normal;opacity:.7">Agência</small></h2>
+      <h2>BigPost<br><small style="font-weight:normal;opacity:.7">SAC</small></h2>
     </div>
     <nav>
-      <button data-p="clientes">Clientes</button>
+      <button data-p="erros">Fila de Erros</button>
+      <button data-p="impressao">Aguardando Impressão</button>
       <button id="logoutBtn" class="navlogout">Sair</button>
     </nav>
   </aside>
   <main>
-    <h1 id="title">Clientes</h1>
+    <h1 id="title">Fila de Erros</h1>
 
-    <section id="clientes" class="page active">
+    <section id="erros" class="page active">
       <div class="card">
-        <h3>Novo Cliente</h3>
-        <div class="grid g2">
-          <div class="field"><label>Tipo de pessoa</label>
-            <select id="cPersonType"><option value="PJ">Pessoa Jurídica</option><option value="PF">Pessoa Física</option></select>
-          </div>
-          <div class="field"><label>CNPJ/CPF *</label><input id="cTax"></div>
-        </div>
-        <div class="grid g2">
-          <div class="field"><label>Razão Social / Nome *</label><input id="cLegal"></div>
-          <div class="field"><label>Nome Fantasia</label><input id="cTrade"></div>
-        </div>
-        <div class="grid">
-          <div class="field"><label>CEP</label><input id="cZip" maxlength="9" placeholder="00000-000"></div>
-          <div class="field"><label>Rua/Av</label><input id="cStreet"></div>
-          <div class="field"><label>Número</label><input id="cNumber"></div>
-        </div>
-        <div class="grid">
-          <div class="field"><label>Complemento (opcional)</label><input id="cComplement"></div>
-          <div class="field"><label>Bairro</label><input id="cDistrict"></div>
-          <div class="field"><label>Cidade</label><input id="cCity"></div>
-        </div>
-        <div class="field" style="max-width:120px"><label>UF</label><input id="cState" maxlength="2"></div>
-        <div class="grid g2">
-          <div class="field"><label>Contato</label><input id="cContactName"></div>
-          <div class="field"><label>E-mail (login do cliente) *</label><input id="cContactEmail" type="email"></div>
-        </div>
-        <p class="notice">Cadastro é feito só por e-mail — o cliente recebe um convite para definir a própria senha.</p>
-        <br><button id="saveClient" class="action">Cadastrar cliente</button>
+        <p class="notice">Encomendas carimbadas com erro (validação do CWS/PPN) — o cliente já foi avisado por
+        e-mail (quando configurado) e decide se recria a etiqueta pelo Portal Cliente. Esta fila só mostra objetos
+        já criados — o SAC não cria nada na PPN aqui.</p>
+        <button id="reloadErros" class="action secondary">Atualizar</button>
       </div>
       <br>
       <div class="card scroll">
         <table>
-          <thead><tr><th>Cliente</th><th>CNPJ/CPF</th><th>Usuário</th><th>Status</th><th>Ação</th></tr></thead>
-          <tbody id="clientsTable"></tbody>
+          <thead><tr><th>ID</th><th>Destinatário</th><th>Erro</th><th>Carimbado em</th><th>Avisado por e-mail</th><th>Ações</th></tr></thead>
+          <tbody id="errosBody"></tbody>
+        </table>
+      </div>
+
+      <br>
+      <div class="card">
+        <h3>Carimbar erro manualmente</h3>
+        <p class="notice">Provisório — enquanto o webhook de validação automática do CWS/PPN não está pronto. Informe o ID
+        da encomenda (status Pendente ou Aferido) e o motivo do erro.</p>
+        <div class="grid g2">
+          <div class="field"><label>ID da encomenda</label><input id="flagId" type="number"></div>
+          <div class="field"><label>Código do erro (opcional)</label><input id="flagCode"></div>
+        </div>
+        <div class="field"><label>Mensagem do erro</label><textarea id="flagMsg" rows="2"></textarea></div>
+        <br><button id="flagBtn" class="action">Carimbar erro</button>
+      </div>
+    </section>
+
+    <section id="impressao" class="page">
+      <div class="card">
+        <p class="notice">Etiquetas recriadas pelo cliente (dados corrigidos, número novo) aguardando o SAC imprimir e
+        liberar pra fila normal de aferição do Operador.</p>
+        <button id="reloadImpressao" class="action secondary">Atualizar</button>
+      </div>
+      <br>
+      <div class="card scroll">
+        <table>
+          <thead><tr><th>ID</th><th>Destinatário</th><th>Recriada a partir de</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody id="impressaoBody"></tbody>
         </table>
       </div>
     </section>
@@ -148,13 +150,15 @@ async function api(path, opts = {}) {
 }
 
 function esc(s) { return (s ?? '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function fmtDate(s) { return s ? new Date(s).toLocaleString('pt-BR') : '—'; }
 
 document.querySelectorAll('nav button[data-p]').forEach(b => b.onclick = () => openp(b.dataset.p));
 function openp(p) {
   document.querySelectorAll('.page').forEach(s => s.classList.remove('active'));
   $(p).classList.add('active');
   $('title').textContent = document.querySelector(`button[data-p="${p}"]`).textContent;
-  if (p === 'clientes') loadClients();
+  if (p === 'erros') loadErros();
+  if (p === 'impressao') loadImpressao();
 }
 
 $('logoutBtn').onclick = async () => {
@@ -185,7 +189,7 @@ async function doLogin() {
   if (supportMode) return doSupportLogin();
   const licenseeId = await resolveLicenseeId({
     lookupUrl: '/api/v1/auth/agencia/lookup-licensee',
-    lookupBody: { email: ($('lu').value || '').trim(), portal: 'agencia' },
+    lookupBody: { email: ($('lu').value || '').trim(), portal: 'sac' },
     state: loginState,
     pickerFieldId: 'lidField', pickerSelectId: 'lid',
     onError: (msg) => { $('msg').textContent = msg; },
@@ -194,12 +198,12 @@ async function doLogin() {
   try {
     await api('/api/v1/auth/agencia/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ licensee_id: licenseeId, username: $('lu').value, password: $('lp').value, portal: 'agencia' })
+      body: JSON.stringify({ licensee_id: licenseeId, username: $('lu').value, password: $('lp').value, portal: 'sac' })
     });
     $('login').classList.add('hidden');
     $('app').classList.remove('hidden');
     S.me = await api('/api/v1/auth/agencia/me');
-    await loadClients();
+    await loadErros();
   } catch (e) { $('msg').textContent = e.message; }
 }
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
@@ -208,7 +212,7 @@ setupLoginForm(['lu', 'lp'], doLogin);
 async function showForgotPassword() {
   const email = ($('lu').value || '').trim() || prompt('Informe o e-mail cadastrado para receber o link de redefinição:');
   if (!email) return;
-  const matches = await lookupLicenseeMatches('/api/v1/auth/agencia/lookup-licensee', { email, portal: 'agencia' });
+  const matches = await lookupLicenseeMatches('/api/v1/auth/agencia/lookup-licensee', { email, portal: 'sac' });
   await Promise.all(matches.map(m => api('/api/v1/auth/password/forgot', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ actor_type: 'licensee_user', email, licensee_id: m.id }),
@@ -236,12 +240,12 @@ $('supportEnter').onclick = async () => {
   if (!id) { $('supportMsg').textContent = 'Escolha um licenciado.'; return; }
   try {
     await api(`/api/v1/auth/support/enter/${id}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ portal: 'agencia' })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ portal: 'sac' })
     });
     $('login').classList.add('hidden');
     $('app').classList.remove('hidden');
     S.me = await api('/api/v1/auth/agencia/me');
-    await loadClients();
+    await loadErros();
   } catch (e) { $('supportMsg').textContent = e.message; }
 };
 
@@ -255,66 +259,49 @@ $('supportCancel').onclick = async () => {
   $('supportToggle').textContent = 'Sou da equipe BigPost (suporte)';
 };
 
-async function loadClients() {
-  const rows = await api('/api/v1/agencia/clients');
-  S.clients = rows;
-  $('clientsTable').innerHTML = rows.map(c => `<tr>
-    <td>${esc(c.trade_name || c.legal_name)}</td>
-    <td>${esc(maskCpfCnpj(c.tax_id))}</td>
-    <td>${esc(c.username)}</td>
-    <td>${c.active ? 'Ativo' : 'Inativo'}</td>
-    <td>
-      <button class="action secondary" onclick="resetClientPassword(${c.id})">Zerar senha</button>
-      ${c.active ? `<button class="action secondary" onclick="deactivateClient(${c.id})">Desativar</button>` : ''}
-    </td>
-  </tr>`).join('') || '<tr><td colspan="5" class="notice">Nenhum cliente cadastrado ainda.</td></tr>';
+async function loadErros() {
+  const rows = await api('/api/v1/sac/shipments?fila=erros');
+  $('errosBody').innerHTML = rows.map(s => `<tr>
+    <td>${s.id}</td>
+    <td>${esc(s.recipient_name)}</td>
+    <td>${esc(s.error_code ? `[${s.error_code}] ` : '')}${esc(s.error_message || '')}</td>
+    <td>${fmtDate(s.error_flagged_at)}</td>
+    <td>${s.error_notified_at ? fmtDate(s.error_notified_at) : '—'}</td>
+    <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
+  </tr>`).join('') || '<tr><td colspan="6" class="notice">Nenhuma encomenda na fila de erro.</td></tr>';
 }
+$('reloadErros').onclick = loadErros;
 
-window.resetClientPassword = async (id) => {
-  if (!confirm('Enviar um link de redefinição de senha para este cliente?')) return;
+$('flagBtn').onclick = async () => {
+  const id = +$('flagId').value;
+  const message = $('flagMsg').value.trim();
+  if (!id || !message) { alert('Informe o ID da encomenda e a mensagem do erro.'); return; }
   try {
-    const out = await api(`/api/v1/agencia/clients/${id}/reset-password`, { method: 'POST' });
-    if (out.emailed) alert('Link de redefinição enviado por e-mail ao cliente.');
-    else alert('Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.link);
+    await api(`/api/v1/sac/shipments/${id}/flag-erro`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error_code: $('flagCode').value || null, error_message: message })
+    });
+    $('flagId').value = ''; $('flagCode').value = ''; $('flagMsg').value = '';
+    await loadErros();
   } catch (e) { alert(e.message); }
 };
 
-window.deactivateClient = async (id) => {
-  try { await api(`/api/v1/agencia/clients/${id}/deactivate`, { method: 'POST' }); await loadClients(); }
-  catch (e) { alert(e.message); }
-};
-
-liveMask($('cTax'), maskCpfCnpj);
-attachCepAutofill('cZip', { street: 'cStreet', district: 'cDistrict', city: 'cCity', state: 'cState' });
-
-const NEW_CLIENT_FIELD_IDS = [
-  'cLegal', 'cTrade', 'cTax', 'cZip', 'cStreet', 'cNumber', 'cComplement', 'cDistrict',
-  'cCity', 'cState', 'cContactName', 'cContactEmail',
-];
-
-function clearNewClientForm() {
-  NEW_CLIENT_FIELD_IDS.forEach(id => { $(id).value = ''; });
-  $('cPersonType').selectedIndex = 0;
+async function loadImpressao() {
+  const rows = await api('/api/v1/sac/shipments?fila=impressao');
+  $('impressaoBody').innerHTML = rows.map(s => `<tr>
+    <td>${s.id}</td>
+    <td>${esc(s.recipient_name)}</td>
+    <td>#${s.replaces_shipment_id}</td>
+    <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
+    <td><button class="action secondary" onclick="marcarImpresso(${s.id})">Marcar impressa</button></td>
+  </tr>`).join('') || '<tr><td colspan="5" class="notice">Nenhuma etiqueta recriada aguardando impressão.</td></tr>';
 }
+$('reloadImpressao').onclick = loadImpressao;
 
-$('saveClient').onclick = async () => {
+window.marcarImpresso = async (id) => {
   try {
-    const out = await api('/api/v1/agencia/clients', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        person_type: $('cPersonType').value,
-        legal_name: $('cLegal').value, trade_name: $('cTrade').value || null, tax_id: onlyDigits($('cTax').value),
-        zip_code: onlyDigits($('cZip').value) || null,
-        address_street: $('cStreet').value || null, address_number: $('cNumber').value || null,
-        address_complement: $('cComplement').value || null, address_district: $('cDistrict').value || null,
-        city: $('cCity').value || null, state: $('cState').value || null,
-        contact_name: $('cContactName').value || null, contact_email: $('cContactEmail').value,
-      })
-    });
-    clearNewClientForm();
-    await loadClients();
-    if (out.invite_emailed) alert('Cliente cadastrado. Convite enviado por e-mail.');
-    else alert('Cliente cadastrado. Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.invite_link);
+    await api(`/api/v1/sac/shipments/${id}/imprimir`, { method: 'POST' });
+    await loadImpressao();
   } catch (e) { alert(e.message); }
 };
 </script>

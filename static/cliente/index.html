@@ -43,8 +43,9 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
 .badge.Pendente{background:#fdf0e0;color:#9a5b00}
 .badge.Aferido{background:#e6eefc;color:#1c4fa0}
 .badge.Postado,.badge.Entregue{background:#e2f5e9;color:#187a3f}
-.badge.Cancelado,.badge.Devolvido{background:#fbe4e4;color:#a53030}
+.badge.Cancelado,.badge.Devolvido,.badge.Erro{background:#fbe4e4;color:#a53030}
 .badge[class*="Trânsito"]{background:#eef0fb;color:#4b3fa0}
+.recreate-banner{background:#fdf0e0;color:#9a5b00;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px}
 code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
 </style>
 </head>
@@ -54,18 +55,20 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
 <div id="login" class="login">
   <form id="loginForm" class="box" autocomplete="on">
     <h2>BigPost — Cliente</h2>
-    <img class="login-logo" src="/agf_ozanan_logo.png" alt="AGF Ozanan">
+    <img class="login-logo" src="/bigpost_logo.png" alt="BigPost">
     <p class="notice">Emita etiquetas com a sua agência e acompanhe as encomendas.</p>
-    <div class="field" id="lidField"><label>Código do licenciado / agência (ID)</label><input id="lid" type="number"></div>
-    <div class="field"><label>Usuário</label><input id="lu" name="username" autocomplete="username"></div>
+    <div class="field"><label>E-mail</label><input id="lu" name="username" type="email" autocomplete="username"></div>
+    <div class="field hidden" id="lidField"><label>Agência</label><select id="lid"></select></div>
     <div class="field"><label>Senha</label><input id="lp" name="password" type="password" autocomplete="current-password"></div>
     <br>
-    <button id="enter" type="submit" class="action">Entrar</button>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <button id="enter" type="submit" class="action">Entrar</button>
+      <a href="#" onclick="showForgotPassword(); return false;" class="notice">Esqueci minha senha</a>
+    </div>
     <p id="msg" style="color:#a53030"></p>
-    <p class="notice"><a href="#" onclick="showForgotPassword(); return false;">Esqueci minha senha</a></p>
     <p class="notice"><a href="#" id="supportToggle">Sou da equipe BigPost (suporte)</a></p>
     <p class="notice">Já usa integração via API key? Não precisa logar aqui — veja o cabeçalho <code>Authorization: Bearer &lt;api_key&gt;</code> na documentação.</p>
-    <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a></p>
+    <p class="notice">Procurando outro portal? <a href="/">/administração</a> · <a href="/agencia/">/agência</a> · <a href="/sac/">/sac</a></p>
   </form>
   <div id="supportPicker" class="box hidden">
     <h2>Escolher licenciado</h2>
@@ -81,7 +84,7 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
 <div id="app" class="app hidden">
   <aside>
     <div class="brand-title">
-      <img class="brand-side" src="/agf_ozanan_logo.png" alt="AGF Ozanan">
+      <img class="brand-side" src="/bigpost_logo.png" alt="BigPost">
       <h2>BigPost<br><small style="font-weight:normal;opacity:.7">Cliente</small></h2>
     </div>
     <nav>
@@ -95,8 +98,9 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
     <h1 id="title">Emitir Etiqueta</h1>
 
     <section id="emitir" class="page active">
+      <div id="recreateBanner" class="recreate-banner hidden"></div>
       <div class="card">
-        <h3>Nova Etiqueta</h3>
+        <h3 id="emitirTitle">Nova Etiqueta</h3>
 
         <div class="section-title">Destinatário</div>
         <div class="grid g2">
@@ -134,6 +138,7 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
         <div class="field"><label>Referência interna (opcional)</label><input id="pRef"></div>
 
         <br><button id="saveShipment" class="action">Emitir etiqueta</button>
+        <button id="cancelRecreate" class="action secondary hidden" type="button">Cancelar recriação</button>
       </div>
     </section>
 
@@ -145,6 +150,7 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
               <option value="">Todos</option>
               <option>Pendente</option><option>Aferido</option><option>Postado</option>
               <option>Em Trânsito</option><option>Entregue</option><option>Devolvido</option><option>Cancelado</option>
+              <option>Erro</option>
             </select>
           </div>
           <div class="field"><label>&nbsp;</label><button id="reload" class="action secondary">Atualizar</button></div>
@@ -153,7 +159,7 @@ code{background:#f4f0e8;padding:2px 6px;border-radius:5px}
       <br>
       <div class="card scroll">
         <table>
-          <thead><tr><th>ID</th><th>Destinatário</th><th>Status</th><th>Peso conf.</th><th>Preço conf.</th><th>Rastreio</th></tr></thead>
+          <thead><tr><th>ID</th><th>Destinatário</th><th>Status</th><th>Peso conf.</th><th>Preço conf.</th><th>Rastreio</th><th>Ações</th></tr></thead>
           <tbody id="shipments"></tbody>
         </table>
       </div>
@@ -216,20 +222,33 @@ $('logoutBtn').onclick = async () => {
 };
 
 let supportMode = false;
+let loginState = { awaitingPick: false };
 $('supportToggle').onclick = (ev) => {
   ev.preventDefault();
   supportMode = !supportMode;
-  $('lidField').classList.toggle('hidden', supportMode);
+  loginState.awaitingPick = false;
+  $('lidField').classList.add('hidden');
   $('supportToggle').textContent = supportMode ? 'Voltar ao login normal' : 'Sou da equipe BigPost (suporte)';
   $('msg').textContent = '';
 };
+$('lu').addEventListener('input', () => {
+  if (loginState.awaitingPick) { loginState.awaitingPick = false; $('lidField').classList.add('hidden'); $('msg').textContent = ''; }
+});
 
 async function doLogin() {
   if (supportMode) return doSupportLogin();
+  const licenseeId = await resolveLicenseeId({
+    lookupUrl: '/api/v1/auth/cliente/lookup-licensee',
+    lookupBody: { email: ($('lu').value || '').trim() },
+    state: loginState,
+    pickerFieldId: 'lidField', pickerSelectId: 'lid',
+    onError: (msg) => { $('msg').textContent = msg; },
+  });
+  if (licenseeId == null) return;
   try {
     await api('/api/v1/auth/cliente/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ licensee_id: +$('lid').value, username: $('lu').value, password: $('lp').value })
+      body: JSON.stringify({ licensee_id: licenseeId, username: $('lu').value, password: $('lp').value })
     });
     $('login').classList.add('hidden');
     $('app').classList.remove('hidden');
@@ -237,14 +256,17 @@ async function doLogin() {
   } catch (e) { $('msg').textContent = e.message; }
 }
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
-setupLoginForm(['lid', 'lu', 'lp'], doLogin);
+setupLoginForm(['lu', 'lp'], doLogin);
 
-function showForgotPassword() {
-  alert(
-    'Esqueci minha senha\n\n' +
-    'Peça a um Administrador ou Master da sua agência para redefinir sua senha ' +
-    '(tela Clientes, botão "Zerar senha").'
-  );
+async function showForgotPassword() {
+  const email = ($('lu').value || '').trim() || prompt('Informe o e-mail cadastrado para receber o link de redefinição:');
+  if (!email) return;
+  const matches = await lookupLicenseeMatches('/api/v1/auth/cliente/lookup-licensee', { email });
+  await Promise.all(matches.map(m => api('/api/v1/auth/password/forgot', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actor_type: 'client', email, licensee_id: m.id }),
+  }).catch(() => {})));
+  alert('Se esse e-mail tiver uma conta, enviamos as instruções de redefinição de senha para ele.');
 }
 
 // --------------------------- Modo suporte (usuário master entra em qualquer licenciado) ---------------------------
@@ -280,36 +302,87 @@ $('supportCancel').onclick = async () => {
   $('supportPicker').classList.add('hidden');
   $('loginForm').classList.remove('hidden');
   supportMode = false;
-  $('lidField').classList.remove('hidden');
+  loginState.awaitingPick = false;
+  $('lidField').classList.add('hidden');
   $('supportToggle').textContent = 'Sou da equipe BigPost (suporte)';
 };
 
 liveMask($('rTax'), maskCpfCnpj);
 attachCepAutofill('rZip', { street: 'rStreet', district: 'rDistrict', city: 'rCity', state: 'rState' });
 
+S.recreatingId = null;
+
+function shipmentPayload() {
+  return {
+    external_reference: $('pRef').value || null,
+    recipient_name: $('rName').value, recipient_tax_id: onlyDigits($('rTax').value) || null,
+    recipient_phone: $('rPhone').value || null, recipient_email: $('rEmail').value || null,
+    recipient_zip: onlyDigits($('rZip').value),
+    recipient_street: $('rStreet').value || null, recipient_number: $('rNumber').value || null,
+    recipient_complement: $('rComplement').value || null, recipient_district: $('rDistrict').value || null,
+    recipient_city: $('rCity').value || null, recipient_state: $('rState').value || null,
+    service_type: $('pService').value || null,
+    weight_declared_kg: $('pWeight').value ? +$('pWeight').value : null,
+    length_cm: $('pLength').value ? +$('pLength').value : null,
+    width_cm: $('pWidth').value ? +$('pWidth').value : null,
+    height_cm: $('pHeight').value ? +$('pHeight').value : null,
+    declared_value: $('pValue').value ? +$('pValue').value : null,
+    contents_description: $('pContents').value || null,
+  };
+}
+
 $('saveShipment').onclick = async () => {
   try {
-    const shipment = await api('/api/v1/cliente/shipments', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        external_reference: $('pRef').value || null,
-        recipient_name: $('rName').value, recipient_tax_id: onlyDigits($('rTax').value) || null,
-        recipient_phone: $('rPhone').value || null, recipient_email: $('rEmail').value || null,
-        recipient_zip: onlyDigits($('rZip').value),
-        recipient_street: $('rStreet').value || null, recipient_number: $('rNumber').value || null,
-        recipient_complement: $('rComplement').value || null, recipient_district: $('rDistrict').value || null,
-        recipient_city: $('rCity').value || null, recipient_state: $('rState').value || null,
-        service_type: $('pService').value || null,
-        weight_declared_kg: $('pWeight').value ? +$('pWeight').value : null,
-        length_cm: $('pLength').value ? +$('pLength').value : null,
-        width_cm: $('pWidth').value ? +$('pWidth').value : null,
-        height_cm: $('pHeight').value ? +$('pHeight').value : null,
-        declared_value: $('pValue').value ? +$('pValue').value : null,
-        contents_description: $('pContents').value || null,
-      })
-    });
-    alert(`Etiqueta #${shipment.id} emitida — status Pendente, aguardando aferição pela agência.`);
+    if (S.recreatingId) {
+      const shipment = await api(`/api/v1/cliente/shipments/${S.recreatingId}/recriar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(shipmentPayload())
+      });
+      alert(`Etiqueta #${shipment.id} criada em substituição à #${S.recreatingId} — status Pendente, aguardando aferição.`);
+      cancelarRecriar();
+    } else {
+      const shipment = await api('/api/v1/cliente/shipments', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(shipmentPayload())
+      });
+      alert(`Etiqueta #${shipment.id} emitida — status Pendente, aguardando aferição pela agência.`);
+    }
     openp('encomendas');
+  } catch (e) { alert(e.message); }
+};
+
+function limparFormEmissao() {
+  ['rName', 'rTax', 'rPhone', 'rEmail', 'rZip', 'rStreet', 'rNumber', 'rComplement', 'rDistrict', 'rCity', 'rState',
+   'pService', 'pWeight', 'pValue', 'pLength', 'pWidth', 'pHeight', 'pContents', 'pRef'].forEach(id => $(id).value = '');
+}
+
+function cancelarRecriar() {
+  S.recreatingId = null;
+  $('recreateBanner').classList.add('hidden');
+  $('cancelRecreate').classList.add('hidden');
+  $('emitirTitle').textContent = 'Nova Etiqueta';
+  $('saveShipment').textContent = 'Emitir etiqueta';
+  limparFormEmissao();
+}
+$('cancelRecreate').onclick = cancelarRecriar;
+
+window.prepararRecriar = async (id) => {
+  try {
+    const s = await api(`/api/v1/cliente/shipments/${id}`);
+    limparFormEmissao();
+    $('rName').value = s.recipient_name || '';
+    $('rZip').value = s.recipient_zip || '';
+    $('rCity').value = s.recipient_city || '';
+    $('rState').value = s.recipient_state || '';
+    $('pService').value = s.service_type || '';
+    $('pWeight').value = s.weight_declared_kg ?? '';
+    $('pValue').value = s.declared_value ?? '';
+    $('pRef').value = s.external_reference || '';
+    S.recreatingId = id;
+    $('recreateBanner').textContent = `Recriando a encomenda #${id} (erro: ${s.error_message || '—'}). Confira/corrija os dados e emita — vai gerar uma etiqueta nova, com outro número.`;
+    $('recreateBanner').classList.remove('hidden');
+    $('cancelRecreate').classList.remove('hidden');
+    $('emitirTitle').textContent = `Recriar etiqueta (a partir da #${id})`;
+    $('saveShipment').textContent = 'Emitir etiqueta corrigida';
+    openp('emitir');
   } catch (e) { alert(e.message); }
 };
 
@@ -319,11 +392,12 @@ async function loadShipments() {
   $('shipments').innerHTML = rows.map(s => `<tr>
     <td>${s.id}</td>
     <td>${esc(s.recipient_name)}</td>
-    <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
+    <td><span class="badge ${esc(s.status)}" title="${esc(s.error_message || '')}">${esc(s.status)}</span></td>
     <td>${s.weight_confirmed_kg ?? '—'}</td>
     <td>${s.price_confirmed != null ? formatBRL(s.price_confirmed) : '—'}</td>
     <td>${esc(s.tracking_code || '—')}</td>
-  </tr>`).join('') || '<tr><td colspan="6" class="notice">Nenhuma encomenda ainda.</td></tr>';
+    <td>${s.status === 'Erro' ? `<button class="action secondary" onclick="prepararRecriar(${s.id})">Recriar etiqueta</button>` : ''}</td>
+  </tr>`).join('') || '<tr><td colspan="7" class="notice">Nenhuma encomenda ainda.</td></tr>';
 }
 $('statusFilter').onchange = loadShipments;
 $('reload').onclick = loadShipments;

@@ -5,32 +5,40 @@ ou manuais"."""
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import create_token, generate_api_key, get_current_client, verify_password
-from app.models.models import Client
+from app.models.models import Client, Licensee
 from app.schemas.schemas import (
     ClientApiKeyOut,
+    ClientLicenseeLookupRequest,
     ClientLoginRequest,
     ClientOut,
     ClientWebhookConfig,
     ClientWebhookOut,
+    LicenseeMatchOut,
 )
 from app.services.audit import log_action
+from app.services.support_access import SUPPORT_USERNAME
 
 router = APIRouter(prefix="/api/v1/auth/cliente", tags=["auth-cliente"])
 
 
 @router.post("/login")
 def login(payload: ClientLoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    # `payload.username` aceita username OU e-mail — desde 2026-09-10 o
+    # cadastro é sempre por e-mail (contact_email dobra de contato + login),
+    # mas contas antigas continuam entrando pelo username de sempre.
+    identifier = payload.username.strip()
     client = (
         db.query(Client)
         .filter(
             Client.licensee_id == payload.licensee_id,
-            Client.username.ilike(payload.username),
+            or_(Client.username.ilike(identifier), Client.contact_email.ilike(identifier)),
             Client.active.is_(True),
         )
         .first()
@@ -52,6 +60,26 @@ def login(payload: ClientLoginRequest, request: Request, response: Response, db:
         ip_address=client_ip(request),
     )
     return {"ok": True, "client": ClientOut.model_validate(client)}
+
+
+@router.post("/lookup-licensee", response_model=list[LicenseeMatchOut])
+def lookup_licensee(payload: ClientLicenseeLookupRequest, db: Session = Depends(get_db)):
+    """Mesma ideia de app/api/auth_agencia.py::lookup_licensee, pro lado do
+    Cliente: resolve automaticamente em qual(is) agência(s) um e-mail tem
+    conta de cliente, dispensando o "Código do licenciado/agência (ID)"
+    digitado à mão."""
+    email = payload.email.strip().lower()
+    rows = (
+        db.query(Client, Licensee)
+        .join(Licensee, Licensee.id == Client.licensee_id)
+        .filter(
+            Client.contact_email.ilike(email),
+            Client.active.is_(True),
+            Client.username != SUPPORT_USERNAME,
+        )
+        .all()
+    )
+    return [LicenseeMatchOut(id=licensee.id, name=licensee.trade_name or licensee.legal_name) for _, licensee in rows]
 
 
 @router.post("/logout")

@@ -2,8 +2,8 @@
 completa do fluxo e por que criamos uma conta técnica por licenciado em vez
 de reaproveitar a sessão do usuário Master interno diretamente.
 
-Resumo do fluxo, chamado a partir da tela de login da Agência, do Operador
-ou do Cliente:
+Resumo do fluxo, chamado a partir da tela de login da Agência, do Operador,
+do SAC ou do Cliente:
 1. POST /login — usuário+senha de uma conta Master interna (tabela `users`,
    a mesma da Administração). Devolve uma sessão transitória de poucos
    minutos (cookie `session_support`) — ainda não dá acesso a nada.
@@ -86,7 +86,7 @@ def enter(
     if not licensee:
         raise HTTPException(status_code=404, detail="Licenciado não encontrado")
 
-    if payload.portal in ("agencia", "operador"):
+    if payload.portal in ("agencia", "operador", "sac"):
         lu = get_or_create_support_licensee_user(db, licensee_id)
         token = create_token(lu.username, "licensee_user", {"uid": lu.id, "licensee_id": lu.licensee_id, "role": lu.role})
         response.set_cookie(

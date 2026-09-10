@@ -36,11 +36,15 @@ ROLE_RANK = {"Operador": 1, "Supervisor": 2, "Master": 3}
 
 # Papéis dos usuários de uma agência licenciada (tabela LicenseeUser) — quem
 # opera o dia a dia no módulo Agência. Master > Administrador > Financeiro;
-# Operador de Caixa e Expedição são papéis operacionais paralelos, um não
-# manda no outro.
+# Operador de Caixa, Expedição e SAC são papéis operacionais paralelos, um
+# não manda no outro (SAC no mesmo nível pra herdar as mesmas listagens —
+# ex. require_licensee_role("Operador de Caixa") —, mas require_licensee_any_role
+# continua isolando as ações específicas de cada um: só quem tem o papel
+# nomeado, ou Administrador/Master, passa).
 LICENSEE_ROLE_RANK = {
     "Operador de Caixa": 1,
     "Expedição": 1,
+    "SAC": 1,
     "Financeiro": 2,
     "Administrador": 3,
     "Master": 4,
@@ -48,6 +52,15 @@ LICENSEE_ROLE_RANK = {
 
 PBKDF2_ITERATIONS = 180_000
 API_KEY_PREFIX = "bp_live_"
+
+# Valor de `password_hash` pra uma conta recém-convidada por e-mail (User,
+# LicenseeUser ou Client — ver app/api/auth_password.py) que ainda não
+# definiu a própria senha. Não é um hash de verdade — não tem o separador
+# "$" que verify_password espera, então qualquer tentativa de login cai no
+# `except Exception` de verify_password e retorna False, bloqueando o login
+# até o convite ser aceito. `password_hash` é NOT NULL no banco, daí precisar
+# de um valor-sentinela em vez de deixar vazio/nulo.
+UNUSABLE_PASSWORD_HASH = "!convite-pendente!"
 
 
 # --------------------------- senha ---------------------------

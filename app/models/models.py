@@ -40,6 +40,11 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    # Desde 2026-09-10, cadastro sempre por e-mail (ver app/api/auth_password.py):
+    # contas novas têm username == email. Nullable porque contas antigas (ex.:
+    # o Master de bootstrap) podem não ter — login aceita username OU e-mail,
+    # nunca exige os dois (ver app/api/auth.py).
+    email: Mapped[str | None] = mapped_column(String(160), unique=True)
     full_name: Mapped[str | None] = mapped_column(String(160))
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # Master | Supervisor | Operador
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -213,6 +218,11 @@ class LicenseeUser(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     licensee_id: Mapped[int] = mapped_column(ForeignKey("licensees.id"), nullable=False)
     username: Mapped[str] = mapped_column(String(80), nullable=False)
+    # Desde 2026-09-10, cadastro sempre por e-mail: contas novas têm
+    # username == email. Nullable pra não quebrar contas antigas (username
+    # arbitrário) e a conta técnica de modo suporte (_suporte_bigpost, sem
+    # e-mail de verdade) — login aceita username OU e-mail.
+    email: Mapped[str | None] = mapped_column(String(160))
     full_name: Mapped[str | None] = mapped_column(String(160))
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -224,10 +234,37 @@ class LicenseeUser(Base):
 
     __table_args__ = (
         UniqueConstraint("licensee_id", "username", name="uq_licensee_user_username"),
+        UniqueConstraint("licensee_id", "email", name="uq_licensee_user_email"),
         CheckConstraint(
-            "role in ('Master','Administrador','Financeiro','Operador de Caixa','Expedição')",
+            "role in ('Master','Administrador','Financeiro','Operador de Caixa','Expedição','SAC')",
             name="ck_licensee_users_role",
         ),
+    )
+
+
+class PasswordSetToken(Base):
+    """Token de uso único pra convite (definir senha na 1ª vez, conta criada
+    por e-mail) ou redefinição ("esqueci minha senha") — mesmo mecanismo pros
+    3 tipos de conta (`actor_type`: 'user', 'licensee_user' ou 'client'; sem
+    FK de verdade porque aponta pra tabelas diferentes conforme o tipo). Só o
+    hash do token fica salvo (mesmo padrão de `Client.api_key_hash`) — o
+    valor em texto puro só existe no e-mail enviado, nunca no banco. Ver
+    app/services/password_tokens.py e app/api/auth_password.py."""
+
+    __tablename__ = "password_set_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(20), nullable=False)  # invite | reset
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+    __table_args__ = (
+        CheckConstraint("actor_type in ('user','licensee_user','client')", name="ck_password_token_actor_type"),
+        CheckConstraint("purpose in ('invite','reset')", name="ck_password_token_purpose"),
     )
 
 
@@ -300,9 +337,15 @@ class Client(Base):
     state: Mapped[str | None] = mapped_column(String(2))
 
     contact_name: Mapped[str | None] = mapped_column(String(120))
+    # Desde 2026-09-10, também o e-mail de login do Cliente (cadastro sempre
+    # por e-mail — não existe mais um campo de login separado; um Client é
+    # uma conta só, então reaproveitar o contato evita duplicar o dado).
     contact_email: Mapped[str | None] = mapped_column(String(160))
     contact_phone: Mapped[str | None] = mapped_column(String(30))
 
+    # Desde 2026-09-10, username == contact_email nas contas novas (nullable
+    # pra não quebrar contas antigas nem a conta técnica de modo suporte,
+    # _suporte_bigpost) — login aceita username OU e-mail.
     username: Mapped[str] = mapped_column(String(80), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
@@ -323,6 +366,7 @@ class Client(Base):
 
     __table_args__ = (
         UniqueConstraint("licensee_id", "username", name="uq_client_username"),
+        UniqueConstraint("licensee_id", "contact_email", name="uq_client_contact_email"),
         CheckConstraint("person_type in ('PJ','PF')", name="ck_clients_person_type"),
     )
 
@@ -378,13 +422,32 @@ class Shipment(Base):
     postado_by: Mapped[int | None] = mapped_column(ForeignKey("licensee_users.id"))
     postado_at: Mapped[datetime | None] = mapped_column(DateTime)
 
+    # Fila de erro / SAC — preenchido quando a validação do CWS/PPN (hoje
+    # ainda manual, futuramente um webhook — ver app/api/shipments_sac.py)
+    # recusa a encomenda. `error_notified_at` marca quando o e-mail
+    # automático pro cliente foi disparado (app/services/email.py); fica
+    # vazio se o SMTP não estiver configurado ou o cliente não tiver e-mail.
+    error_code: Mapped[str | None] = mapped_column(String(40))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    error_flagged_at: Mapped[datetime | None] = mapped_column(DateTime)
+    error_notified_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    # Recriação de etiqueta: quando o cliente decide recriar uma encomenda
+    # que caiu em erro (com dados corrigidos), a NOVA encomenda aponta pra
+    # original aqui — a original permanece com status 'Erro' como histórico,
+    # nunca é sobrescrita. `sac_printed_at/by` marca quando o SAC imprimiu a
+    # etiqueta recriada e a devolveu pra fila de aferição (Operador).
+    replaces_shipment_id: Mapped[int | None] = mapped_column(ForeignKey("shipments.id"))
+    sac_printed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    sac_printed_by: Mapped[int | None] = mapped_column(ForeignKey("licensee_users.id"))
+
     status: Mapped[str] = mapped_column(String(20), default="Pendente", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
 
     __table_args__ = (
         CheckConstraint(
-            "status in ('Pendente','Aferido','Postado','Em Trânsito','Entregue','Devolvido','Cancelado')",
+            "status in ('Pendente','Aferido','Postado','Em Trânsito','Entregue','Devolvido','Cancelado','Erro')",
             name="ck_shipments_status",
         ),
     )

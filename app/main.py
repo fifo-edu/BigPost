@@ -11,6 +11,7 @@ from app.api import (
     auth,
     auth_agencia,
     auth_cliente,
+    auth_password,
     auth_support,
     bank,
     charges,
@@ -26,6 +27,7 @@ from app.api import (
     products,
     shipments_agencia,
     shipments_cliente,
+    shipments_sac,
     users,
 )
 from app.core.config import settings
@@ -81,6 +83,7 @@ def bootstrap() -> None:
             db.add(
                 User(
                     username=settings.bootstrap_master_username,
+                    email=settings.bootstrap_master_email or None,
                     full_name="Administrador Master",
                     role="Master",
                     password_hash=hash_password(settings.bootstrap_master_password),
@@ -106,6 +109,7 @@ app = FastAPI(title="BigPost", lifespan=lifespan)
 
 # Administração interna (equipe BigPost: cadastro/licenciamento de agências)
 app.include_router(auth.router)
+app.include_router(auth_password.router)
 app.include_router(users.router)
 app.include_router(licensees.router)
 app.include_router(licensee_users.router)
@@ -133,6 +137,9 @@ app.include_router(shipments_agencia.router)
 app.include_router(auth_cliente.router)
 app.include_router(shipments_cliente.router)
 
+# Portal SAC (fila de encomendas com erro — ver app/api/shipments_sac.py)
+app.include_router(shipments_sac.router)
+
 # Portais estáticos (HTML/JS puro, sem build step) — mais específicos primeiro,
 # senão o mount de "/" (admin interno) engoliria as rotas abaixo. Usa
 # _static_app (acima) em vez de StaticFiles(...) direto para que uma pasta
@@ -140,20 +147,27 @@ app.include_router(shipments_cliente.router)
 static_agencia = _static_app("static/agencia")
 static_cliente = _static_app("static/cliente")
 static_operador = _static_app("static/operador")
+static_sac = _static_app("static/sac")
 static_admin = _static_app("static")
 
 app.mount("/agencia", static_agencia, name="static-agencia")
 app.mount("/cliente", static_cliente, name="static-cliente")
 app.mount("/operador", static_operador, name="static-operador")
+app.mount("/sac", static_sac, name="static-sac")
 app.mount("/", static_admin, name="static")
 
-# Em produção os 3 portais operacionais vivem em subdomínios próprios
-# (agencia./cliente./operador.bigpost.fluxoempresa.com.br) servidos por este
-# mesmo backend — o middleware abaixo decide qual portal estático servir em
-# "/" olhando o cabeçalho Host. Fora desses 3 subdomínios (domínio raiz,
-# localhost puro, etc.) nada muda: continua caindo nos mounts por caminho
-# acima. Ver app/core/subdomain_static.py.
+# Em produção os 4 portais operacionais vivem em subdomínios próprios
+# (agencia./cliente./operador./sac.bigpost.fluxoempresa.com.br) servidos por
+# este mesmo backend — o middleware abaixo decide qual portal estático
+# servir em "/" olhando o cabeçalho Host. Fora desses 4 subdomínios (domínio
+# raiz, localhost puro, etc.) nada muda: continua caindo nos mounts por
+# caminho acima. Ver app/core/subdomain_static.py.
 app.add_middleware(
     SubdomainStaticMiddleware,
-    portal_apps={"agencia": static_agencia, "cliente": static_cliente, "operador": static_operador},
+    portal_apps={
+        "agencia": static_agencia,
+        "cliente": static_cliente,
+        "operador": static_operador,
+        "sac": static_sac,
+    },
 )

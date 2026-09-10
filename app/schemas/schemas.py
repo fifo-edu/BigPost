@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -13,6 +14,7 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     username: str
+    email: str | None = None
     full_name: str | None = None
     role: str
     active: bool
@@ -20,14 +22,42 @@ class UserOut(BaseModel):
 
 
 class UserCreate(BaseModel):
-    username: str
+    """Desde 2026-09-10, cadastro sempre por e-mail — quem cadastra não
+    define senha; o sistema manda um convite (ver app/services/password_tokens.py)."""
+
+    email: EmailStr
     full_name: str | None = None
-    password: str = Field(min_length=6)
     role: str = "Operador"
 
 
-class PasswordResetRequest(BaseModel):
-    new_password: str = Field(min_length=6)
+class UserCreateOut(UserOut):
+    """Resposta do cadastro: além dos dados de sempre, diz se o convite saiu
+    por e-mail (SMTP configurado) — se não, `invite_link` traz o link pra
+    quem cadastrou copiar e mandar manualmente."""
+
+    invite_emailed: bool
+    invite_link: str | None = None
+
+
+class PasswordLinkOut(BaseModel):
+    """Resposta de uma ação administrativa que gera um convite/redefinição
+    de senha (cadastro de usuário, "Zerar Senha") — nunca do "Esqueci minha
+    senha" público, que não devolve o link por segurança (ver
+    app/api/auth_password.py)."""
+
+    emailed: bool
+    link: str
+
+
+class PasswordForgotRequest(BaseModel):
+    actor_type: Literal["user", "licensee_user", "client"]
+    email: EmailStr
+    licensee_id: int | None = None  # obrigatório pra licensee_user/client
+
+
+class PasswordSetRequest(BaseModel):
+    token: str
+    new_password: str
 
 
 # --------------------------- Licensees (cadastro detalhado) ---------------------------
@@ -261,13 +291,15 @@ class ClientCorreiosCredentialOut(BaseModel):
 
 
 # --------------------------- Usuários da agência licenciada ---------------------------
-LICENSEE_ROLES = ("Master", "Administrador", "Financeiro", "Operador de Caixa", "Expedição")
+LICENSEE_ROLES = ("Master", "Administrador", "Financeiro", "Operador de Caixa", "Expedição", "SAC")
 
 
 class LicenseeUserCreate(BaseModel):
-    username: str
+    """Desde 2026-09-10, cadastro sempre por e-mail — quem cadastra não
+    define senha; o sistema manda um convite (ver app/services/password_tokens.py)."""
+
+    email: EmailStr
     full_name: str | None = None
-    password: str = Field(min_length=6)
     role: str = "Operador de Caixa"
 
 
@@ -276,10 +308,16 @@ class LicenseeUserOut(BaseModel):
     id: int
     licensee_id: int
     username: str
+    email: str | None = None
     full_name: str | None
     role: str
     active: bool
     locked: bool = False
+
+
+class LicenseeUserCreateOut(LicenseeUserOut):
+    invite_emailed: bool
+    invite_link: str | None = None
 
 
 # --------------------------- Auth: Agência (LicenseeUser) e Cliente (Client) ---------------------------
@@ -287,11 +325,11 @@ class LicenseeUserLoginRequest(BaseModel):
     licensee_id: int
     username: str
     password: str
-    # Qual dos 2 portais fez a chamada — "agencia" (Master/Administrador/
-    # Financeiro) ou "operador" (Operador de Caixa/Expedição). Cada frontend
-    # estático manda seu próprio valor fixo; usado só para impedir login
-    # "no portal errado" (ver app/api/auth_agencia.py). Default "agencia"
-    # por compatibilidade com chamadas antigas.
+    # Qual dos 3 portais fez a chamada — "agencia" (Master/Administrador/
+    # Financeiro), "operador" (Operador de Caixa/Expedição) ou "sac" (SAC).
+    # Cada frontend estático manda seu próprio valor fixo; usado só para
+    # impedir login "no portal errado" (ver app/api/auth_agencia.py).
+    # Default "agencia" por compatibilidade com chamadas antigas.
     portal: str = "agencia"
 
 
@@ -299,6 +337,26 @@ class ClientLoginRequest(BaseModel):
     licensee_id: int
     username: str
     password: str
+
+
+class LicenseeLookupRequest(BaseModel):
+    """Resolve automaticamente qual(is) agência(s) um e-mail pertence, pra
+    dispensar a digitação manual do "Código do licenciado" na tela de login
+    (desde 2026-09-10, tarde) — ver app/api/auth_agencia.py::lookup_licensee."""
+
+    email: EmailStr
+    # "agencia" | "operador" | "sac" — filtra pelos papéis daquele portal
+    # (mesmo mapa PORTAL_ROLES do login); None = qualquer papel.
+    portal: str | None = None
+
+
+class ClientLicenseeLookupRequest(BaseModel):
+    email: EmailStr
+
+
+class LicenseeMatchOut(BaseModel):
+    id: int
+    name: str
 
 
 # --------------------------- Auth: "modo suporte" (Master interno entra em qualquer licenciado) ---------------------------
@@ -319,13 +377,18 @@ class SupportLicenseeOut(BaseModel):
 
 
 class SupportEnterRequest(BaseModel):
-    # "agencia" | "operador" | "cliente" — qual portal fez a chamada (cada
-    # frontend estático manda o seu próprio valor fixo).
+    # "agencia" | "operador" | "cliente" | "sac" — qual portal fez a chamada
+    # (cada frontend estático manda o seu próprio valor fixo).
     portal: str
 
 
 # --------------------------- Clientes de cada agência ---------------------------
 class ClientCreate(BaseModel):
+    """Desde 2026-09-10, cadastro sempre por e-mail: `contact_email` é ao
+    mesmo tempo o contato E o login desse cliente (um Client = uma conta só,
+    não faz sentido duplicar o dado) — obrigatório agora, e quem cadastra não
+    define senha; o sistema manda um convite (ver app/services/password_tokens.py)."""
+
     person_type: str = "PJ"
     legal_name: str
     trade_name: str | None = None
@@ -340,11 +403,8 @@ class ClientCreate(BaseModel):
     state: str | None = None
 
     contact_name: str | None = None
-    contact_email: EmailStr | None = None
+    contact_email: EmailStr
     contact_phone: str | None = None
-
-    username: str
-    password: str = Field(min_length=6)
 
 
 class ClientOut(BaseModel):
@@ -370,6 +430,11 @@ class ClientOut(BaseModel):
     webhook_url: str | None
     active: bool
     created_at: datetime
+
+
+class ClientCreateOut(ClientOut):
+    invite_emailed: bool
+    invite_link: str | None = None
 
 
 class ClientApiKeyOut(BaseModel):
@@ -433,6 +498,13 @@ class ShipmentOut(BaseModel):
     price_confirmed: float | None
     tracking_code: str | None
     status: str
+    # Fila de erro / SAC — ver app/api/shipments_sac.py.
+    error_code: str | None = None
+    error_message: str | None = None
+    error_flagged_at: datetime | None = None
+    error_notified_at: datetime | None = None
+    replaces_shipment_id: int | None = None
+    sac_printed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -450,6 +522,17 @@ class ShipmentPostagemRequest(BaseModel):
 class ShipmentEventCreate(BaseModel):
     status: str
     description: str | None = None
+
+
+# --------------------------- Encomendas (módulo SAC) ---------------------------
+class ShipmentErrorFlagRequest(BaseModel):
+    """Carimba uma encomenda como 'Erro' — hoje um lançamento manual (fica no
+    Portal SAC/Administrador/Master), depois de confirmado o contrato de
+    Pré-Postagem/PPN isto vira automático via webhook do CWS (ver
+    app/services/correios_cws.py e app/api/shipments_sac.py)."""
+
+    error_code: str | None = None
+    error_message: str = Field(min_length=1)
 
 
 class ShipmentEventOut(BaseModel):

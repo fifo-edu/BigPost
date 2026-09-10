@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import client_ip
@@ -15,9 +16,16 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 @router.post("/login")
 def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    # `payload.username` aceita username OU e-mail — desde 2026-09-10 o
+    # cadastro é sempre por e-mail, mas contas antigas (sem e-mail) continuam
+    # entrando pelo username de sempre. Ver app/api/auth_password.py.
+    identifier = payload.username.strip()
     user = (
         db.query(User)
-        .filter(User.username.ilike(payload.username), User.active.is_(True))
+        .filter(
+            or_(User.username.ilike(identifier), User.email.ilike(identifier)),
+            User.active.is_(True),
+        )
         .first()
     )
     if user and user.locked:
