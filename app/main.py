@@ -8,6 +8,7 @@ from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api import (
+    admin_clients,
     auth,
     auth_agencia,
     auth_cliente,
@@ -113,6 +114,7 @@ app.include_router(auth_password.router)
 app.include_router(users.router)
 app.include_router(licensees.router)
 app.include_router(licensee_users.router)
+app.include_router(admin_clients.router)
 app.include_router(correios.router)
 app.include_router(client_correios.router)
 app.include_router(products.router)

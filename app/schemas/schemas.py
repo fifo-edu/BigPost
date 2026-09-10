@@ -437,6 +437,15 @@ class ClientCreateOut(ClientOut):
     invite_link: str | None = None
 
 
+class ClientAdminOut(ClientOut):
+    """Usado só na consulta cross-licenciado do Admin (aba Cliente >
+    Relatórios, ver app/api/admin_clients.py) — igual a `ClientOut`, mais o
+    nome do licenciado (o portal da Agência já sabe qual é o seu, não
+    precisa disso)."""
+
+    licensee_name: str
+
+
 class ClientApiKeyOut(BaseModel):
     api_key: str  # texto puro — só aparece nesta resposta, uma vez
     api_key_prefix: str

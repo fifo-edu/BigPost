@@ -89,6 +89,11 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     <nav>
       <button data-p="dash">Dashboard</button>
       <button data-p="clientes" data-minrole="Supervisor">Credenciais</button>
+      <button class="navgroup" data-minrole="Supervisor" onclick="toggleNavGroup('cliente')">Cliente <span class="car" id="clienteCar">▾</span></button>
+      <div class="navsub hidden" id="clienteSub" data-minrole="Supervisor">
+        <button class="subbtn" data-p="cli_relatorios">Relatórios</button>
+        <button class="subbtn" data-p="cli_conferencia">Conferência de Fatura</button>
+      </div>
       <button data-p="cobrancas">Cobranças</button>
       <button data-p="banco">Banco</button>
       <button data-p="parametros" data-minrole="Supervisor">Parâmetros</button>
@@ -117,6 +122,28 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
           <thead><tr><th>Empresa</th><th>CNPJ/CPF</th><th>Cidade/UF</th><th>Contato</th><th>Status</th><th>Ação</th></tr></thead>
           <tbody id="licensees"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section id="cli_relatorios" class="page">
+      <div class="card scroll">
+        <h3>Cliente — Relatórios</h3>
+        <p class="notice">Consulta dos clientes cadastrados nas agências licenciadas (somente leitura — o cadastro é feito pelo próprio portal da Agência).</p>
+        <div class="grid g2">
+          <div class="field"><label>Licenciado</label><select id="cliRelLicensee"><option value="">Todos</option></select></div>
+          <div class="field"><label>Buscar</label><input id="cliRelSearch" placeholder="Nome, e-mail ou CNPJ/CPF"></div>
+        </div>
+        <table>
+          <thead><tr><th>Cliente</th><th>CNPJ/CPF</th><th>E-mail</th><th>Licenciado</th><th>Status</th></tr></thead>
+          <tbody id="cliRelBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="cli_conferencia" class="page">
+      <div class="card">
+        <h3>Conferência de Fatura</h3>
+        <p class="notice">Em construção — essa conferência ainda não foi implementada.</p>
       </div>
     </section>
 
@@ -254,7 +281,7 @@ async function api(url, opts) {
 }
 
 async function loadAll() {
-  const [state, licensees, charges, bankEntries, bankConfig, remittances, params] = await Promise.all([
+  const [state, licensees, charges, bankEntries, bankConfig, remittances, params, clients] = await Promise.all([
     api('/api/v1/state'),
     api('/api/v1/licensees'),
     api('/api/v1/charges'),
@@ -262,8 +289,9 @@ async function loadAll() {
     api('/api/v1/bank/config'),
     api('/api/v1/bank/remittances'),
     api('/api/v1/params').catch(() => []),
+    api('/api/v1/clients').catch(() => []),
   ]);
-  S = { state, licensees, charges, bankEntries, bankConfig, remittances, params };
+  S = { state, licensees, charges, bankEntries, bankConfig, remittances, params, clients };
   let usersTable = [];
   try { usersTable = await api('/api/v1/users'); } catch (e) {}
   S.usersTable = usersTable;
@@ -284,6 +312,8 @@ function render() {
 
   const licOpts = S.licensees.map(l => `<option value="${l.id}">${esc(l.trade_name || l.legal_name)}</option>`).join('');
   $('chgL').innerHTML = licOpts;
+  $('cliRelLicensee').innerHTML = '<option value="">Todos</option>' + licOpts;
+  renderCliRelatorios();
 
   $('licensees').innerHTML = S.licensees.map(l => `<tr>
     <td>${esc(l.trade_name || l.legal_name)}</td>
@@ -345,6 +375,39 @@ function openp(p, title) {
   }
 }
 document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => openp(b.dataset.p));
+
+function toggleNavGroup(id) {
+  const sub = $(id + 'Sub');
+  sub.classList.toggle('hidden');
+  $(id + 'Car').textContent = sub.classList.contains('hidden') ? '▾' : '▴';
+}
+
+// --------------------------- Cliente > Relatórios ---------------------------
+// Consulta somente leitura, cross-licenciado (GET /api/v1/clients, Supervisor+
+// — ver app/api/admin_clients.py). O cadastro do cliente em si continua no
+// portal da Agência; aqui é só pra conferência pela equipe BigPost.
+function renderCliRelatorios() {
+  const licId = $('cliRelLicensee').value;
+  const q = ($('cliRelSearch').value || '').trim().toLowerCase();
+  const qDigits = onlyDigits(q);
+  const rows = (S.clients || []).filter(c => {
+    if (licId && String(c.licensee_id) !== licId) return false;
+    if (!q) return true;
+    return (c.legal_name || '').toLowerCase().includes(q)
+      || (c.trade_name || '').toLowerCase().includes(q)
+      || (c.contact_email || '').toLowerCase().includes(q)
+      || (qDigits && onlyDigits(c.tax_id || '').includes(qDigits));
+  });
+  $('cliRelBody').innerHTML = rows.map(c => `<tr>
+    <td>${esc(c.trade_name || c.legal_name)}</td>
+    <td>${esc(maskCpfCnpj(c.tax_id))}</td>
+    <td>${esc(c.contact_email || '')}</td>
+    <td>${esc(c.licensee_name)}</td>
+    <td>${c.active ? 'Ativo' : 'Inativo'}</td>
+  </tr>`).join('') || '<tr><td colspan="5" class="notice">Nenhum cliente encontrado.</td></tr>';
+}
+$('cliRelLicensee').addEventListener('change', renderCliRelatorios);
+$('cliRelSearch').addEventListener('input', renderCliRelatorios);
 
 function bbtab(id) {
   document.querySelectorAll('.bbpanel').forEach(x => x.classList.add('hidden'));
