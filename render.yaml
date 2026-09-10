@@ -8,7 +8,14 @@
 # aqui na conversa).
 databases:
   - name: bigpost-db
-    plan: starter
+    # Os planos antigos de banco (ex.: "starter") saíram de linha para bancos
+    # novos — o Render agora nomeia os planos pagos de Postgres por
+    # RAM/armazenamento. "basic_256mb" é o menor plano pago (equivalente em
+    # espírito ao antigo "starter": sem o banco expirar em 30 dias como no
+    # plano "free"). Suba para "basic_1gb"/"basic_4gb" depois, direto no
+    # painel do Render, se o volume de dados pedir mais — não precisa mexer
+    # aqui pra isso.
+    plan: basic_256mb
     databaseName: bigpost
     user: bigpost
 

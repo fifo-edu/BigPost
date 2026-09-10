@@ -1,59 +1,33 @@
-"""Atualiza (ou cria, se não existir nenhum) o usuário Master interno do
-BigPost — login do portal Administração (`/`), reaproveitado também pelo
-"modo suporte" nos portais Agência/Operador/Cliente.
+"""DESCONTINUADO — não rode este script.
 
-Por que este script e não só editar o `.env`? `BOOTSTRAP_MASTER_USERNAME`/
-`BOOTSTRAP_MASTER_PASSWORD` do `.env` só são usados para *criar* o usuário
-Master na primeira subida, quando a tabela `users` está vazia (ver
-`bootstrap()` em `app/main.py`). Como este BigPost já tem um usuário Master
-no banco, mudar só o `.env` não muda a senha de quem já existe — é preciso
-atualizar a linha dele no banco, que é o que este script faz.
+Existia aqui uma versão anterior que editava a linha do usuário Master
+direto no banco (fora da aplicação). Depois da premissa combinada com o
+usuário em 2026-09-10 — "sempre que houver alteração, nunca mexeremos no
+banco de dados" (leia-se: nada de UPDATE/DELETE/script manual tocando dados
+direto; mudança de estrutura via migration do Alembic, que roda sozinha no
+deploy, continua normal) — isso deixou de ser aceitável.
 
-Se houver mais de um usuário com papel Master, só o primeiro (menor id) é
-atualizado — não dá pra renomear todos para o mesmo login, já que o login
-é único.
+Pra trocar (ou criar) o usuário Master, use a própria aplicação, sem tocar
+no banco:
 
-Rode uma vez, com o venv ativado, na pasta do projeto:
+  1. Entre no portal Administração (`/`) com QUALQUER usuário Master que já
+     funcione hoje.
+  2. Aba "Usuários" → cadastre um novo usuário com o login/senha desejados e
+     perfil "Master" (`POST /api/v1/users`, já exige o próprio papel Master
+     pra chamar — ver app/api/users.py::create_user).
+  3. Pronto — o login novo já funciona. O usuário Master antigo continua
+     existindo (não há endpoint de desativar usuário interno hoje); se
+     quiser, pode trocar a senha dele por algo aleatório com "Zerar Senha"
+     pela mesma tela, só pra ele parar de ser usado.
 
-    python scripts\\set_master_credentials.py
-
-Não precisa reiniciar o servidor depois — a mudança já vale na próxima vez
-que alguém logar.
+Se, no dia da primeira instalação (banco `users` ainda vazio), quiser que o
+Master já suba com um login específico, isso é feito só editando
+`BOOTSTRAP_MASTER_USERNAME`/`BOOTSTRAP_MASTER_PASSWORD` no `.env` ANTES da
+primeira subida do servidor (`bootstrap()` em app/main.py cria o Master só
+quando a tabela está vazia) — de novo, sem precisar de script.
 """
-from app.core.db import SessionLocal
-from app.core.security import hash_password
-from app.models.models import User
 
-NEW_USERNAME = "Fifo"
-NEW_PASSWORD = "2010"
-
-
-def main() -> None:
-    db = SessionLocal()
-    try:
-        master = db.query(User).filter(User.role == "Master").order_by(User.id).first()
-        if master:
-            print(f"Usuário Master encontrado: '{master.username}' (id={master.id}). Atualizando login/senha...")
-            master.username = NEW_USERNAME
-            master.password_hash = hash_password(NEW_PASSWORD)
-            master.failed_attempts = 0
-            master.locked = False
-            master.active = True
-        else:
-            print("Nenhum usuário Master encontrado. Criando um novo...")
-            master = User(
-                username=NEW_USERNAME,
-                full_name="Administrador Master",
-                role="Master",
-                password_hash=hash_password(NEW_PASSWORD),
-                active=True,
-            )
-            db.add(master)
-        db.commit()
-        print(f"Pronto. Login: '{NEW_USERNAME}' / Senha: '{NEW_PASSWORD}'.")
-    finally:
-        db.close()
-
-
-if __name__ == "__main__":
-    main()
+raise SystemExit(
+    "Este script foi descontinuado — veja as instruções no topo do arquivo "
+    "para trocar o usuário Master pela própria aplicação, sem editar o banco na mão."
+)
