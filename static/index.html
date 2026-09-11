@@ -91,6 +91,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
       <button data-p="clientes" data-minrole="Supervisor">Credenciais</button>
       <button class="navgroup" data-minrole="Supervisor" onclick="toggleNavGroup('cliente')">Cliente <span class="car" id="clienteCar">▾</span></button>
       <div class="navsub hidden" id="clienteSub" data-minrole="Supervisor">
+        <button class="subbtn" data-p="cli_cadastro">Cadastrar Cliente</button>
         <button class="subbtn" data-p="cli_relatorios">Relatórios</button>
         <button class="subbtn" data-p="cli_conferencia">Conferência de Fatura</button>
       </div>
@@ -125,10 +126,46 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
       </div>
     </section>
 
+    <section id="cli_cadastro" class="page">
+      <div class="card">
+        <h3>Cadastrar Cliente</h3>
+        <p class="notice">Cadastro é feito só por e-mail — o cliente recebe um convite para definir a própria senha. O cadastro normal continua sendo feito pelo próprio portal da Agência; esta tela é um atalho para a equipe BigPost cadastrar direto, escolhendo o licenciado.</p>
+        <div class="grid g2">
+          <div class="field"><label>Licenciado *</label><select id="cliCadLicensee"></select></div>
+          <div class="field"><label>Tipo de pessoa</label>
+            <select id="cliCadPersonType"><option value="PJ">Pessoa Jurídica</option><option value="PF">Pessoa Física</option></select>
+          </div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>CNPJ/CPF *</label><input id="cliCadTax"></div>
+          <div class="field"><label>Razão Social / Nome *</label><input id="cliCadLegal"></div>
+        </div>
+        <div class="field"><label>Nome Fantasia</label><input id="cliCadTrade"></div>
+        <div class="grid">
+          <div class="field"><label>CEP</label><input id="cliCadZip" maxlength="9" placeholder="00000-000"></div>
+          <div class="field"><label>Rua/Av</label><input id="cliCadStreet"></div>
+          <div class="field"><label>Número</label><input id="cliCadNumber"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Complemento (opcional)</label><input id="cliCadComplement"></div>
+          <div class="field"><label>Bairro</label><input id="cliCadDistrict"></div>
+          <div class="field"><label>Cidade</label><input id="cliCadCity"></div>
+        </div>
+        <div class="field" style="max-width:120px"><label>UF</label><input id="cliCadState" maxlength="2"></div>
+        <div class="grid g2">
+          <div class="field"><label>Nome do contato</label><input id="cliCadContactName"></div>
+          <div class="field"><label>Telefone</label><input id="cliCadPhone" placeholder="(11) 98765-4321"></div>
+        </div>
+        <div class="field"><label>E-mail (login do cliente) *</label><input id="cliCadEmail" type="email"></div>
+        <br><button id="saveCliCadastro" class="action">Cadastrar cliente</button>
+        <p id="cliCadMsg" style="color:#a53030"></p>
+      </div>
+    </section>
+
     <section id="cli_relatorios" class="page">
       <div class="card scroll">
         <h3>Cliente — Relatórios</h3>
-        <p class="notice">Consulta dos clientes cadastrados nas agências licenciadas (somente leitura — o cadastro é feito pelo próprio portal da Agência).</p>
+        <p class="notice">Consulta dos clientes cadastrados nas agências licenciadas (o cadastro normal é feito pelo portal da Agência; a aba "Cadastrar Cliente" ao lado é um atalho equivalente aqui no Admin).</p>
         <div class="grid g2">
           <div class="field"><label>Licenciado</label><select id="cliRelLicensee"><option value="">Todos</option></select></div>
           <div class="field"><label>Buscar</label><input id="cliRelSearch" placeholder="Nome, e-mail ou CNPJ/CPF"></div>
@@ -313,6 +350,7 @@ function render() {
   const licOpts = S.licensees.map(l => `<option value="${l.id}">${esc(l.trade_name || l.legal_name)}</option>`).join('');
   $('chgL').innerHTML = licOpts;
   $('cliRelLicensee').innerHTML = '<option value="">Todos</option>' + licOpts;
+  $('cliCadLicensee').innerHTML = licOpts;
   renderCliRelatorios();
 
   $('licensees').innerHTML = S.licensees.map(l => `<tr>
@@ -408,6 +446,48 @@ function renderCliRelatorios() {
 }
 $('cliRelLicensee').addEventListener('change', renderCliRelatorios);
 $('cliRelSearch').addEventListener('input', renderCliRelatorios);
+
+// --------------------------- Cliente > Cadastrar Cliente ---------------------------
+// POST /api/v1/clients (admin, Supervisor+ — ver app/api/admin_clients.py).
+// Mesmos padrões brasileiros usados no resto do Admin: CEP com autopreenchimento
+// via ViaCEP, campo único CPF/CNPJ e campo único fixo/celular (br-utils.js).
+liveMask($('cliCadTax'), maskCpfCnpj);
+liveMask($('cliCadPhone'), maskPhone);
+attachCepAutofill('cliCadZip', {
+  street: 'cliCadStreet', district: 'cliCadDistrict', city: 'cliCadCity', state: 'cliCadState',
+});
+
+function clearCliCadastroForm() {
+  ['cliCadTax', 'cliCadLegal', 'cliCadTrade', 'cliCadZip', 'cliCadStreet', 'cliCadNumber',
+    'cliCadComplement', 'cliCadDistrict', 'cliCadCity', 'cliCadState', 'cliCadContactName',
+    'cliCadPhone', 'cliCadEmail'].forEach(id => { $(id).value = ''; });
+  $('cliCadPersonType').selectedIndex = 0;
+  $('cliCadMsg').textContent = '';
+}
+
+$('saveCliCadastro').onclick = async () => {
+  $('cliCadMsg').textContent = '';
+  try {
+    const out = await api('/api/v1/clients', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        licensee_id: +$('cliCadLicensee').value,
+        person_type: $('cliCadPersonType').value,
+        legal_name: $('cliCadLegal').value, trade_name: $('cliCadTrade').value || null, tax_id: onlyDigits($('cliCadTax').value),
+        zip_code: onlyDigits($('cliCadZip').value) || null,
+        address_street: $('cliCadStreet').value || null, address_number: $('cliCadNumber').value || null,
+        address_complement: $('cliCadComplement').value || null, address_district: $('cliCadDistrict').value || null,
+        city: $('cliCadCity').value || null, state: $('cliCadState').value || null,
+        contact_name: $('cliCadContactName').value || null, contact_phone: onlyDigits($('cliCadPhone').value) || null,
+        contact_email: $('cliCadEmail').value,
+      })
+    });
+    clearCliCadastroForm();
+    await loadAll();
+    if (out.invite_emailed) alert('Cliente cadastrado. Convite enviado por e-mail.');
+    else alert('Cliente cadastrado. Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.invite_link);
+  } catch (e) { $('cliCadMsg').textContent = e.message; }
+};
 
 function bbtab(id) {
   document.querySelectorAll('.bbpanel').forEach(x => x.classList.add('hidden'));

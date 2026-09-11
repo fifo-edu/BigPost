@@ -39,6 +39,20 @@ function maskCpfCnpj(v) {
   return d.length > 11 ? maskCNPJ(v) : maskCPF(v);
 }
 
+/* Campo único de telefone que aceita tanto fixo (DDD + 8 dígitos) quanto
+ * celular (DDD + 9 dígitos) — decide o formato pela quantidade de dígitos
+ * já digitados, mesmo padrão do campo único de CPF/CNPJ acima.
+ * Fixo:    (11) 2345-6789
+ * Celular: (11) 92345-6789 */
+function maskPhone(v) {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length > 10) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length > 6) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  if (d.length > 2) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length > 0) return `(${d}`;
+  return d;
+}
+
 /* Aplica uma função de máscara a um <input> conforme o usuário digita,
  * preservando a posição do cursor de forma simples (bom o suficiente para
  * campos numéricos curtos como CEP/CPF/CNPJ). */

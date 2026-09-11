@@ -446,6 +446,15 @@ class ClientAdminOut(ClientOut):
     licensee_name: str
 
 
+class ClientAdminCreate(ClientCreate):
+    """Igual a `ClientCreate`, mais `licensee_id` — usado só no cadastro
+    cross-licenciado do Admin (aba Cliente > Cadastrar Cliente). O portal da
+    Agência não precisa disso porque já sabe qual é o seu licenciado (vem da
+    sessão logada, não do corpo da requisição)."""
+
+    licensee_id: int
+
+
 class ClientApiKeyOut(BaseModel):
     api_key: str  # texto puro — só aparece nesta resposta, uma vez
     api_key_prefix: str
