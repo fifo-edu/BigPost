@@ -404,7 +404,8 @@ class ClientCreate(BaseModel):
 
     contact_name: str | None = None
     contact_email: EmailStr
-    contact_phone: str | None = None
+    contact_phone: str | None = None  # telefone fixo, opcional
+    contact_phone_mobile: str | None = None  # telefone celular, opcional
 
 
 class ClientOut(BaseModel):
@@ -425,6 +426,7 @@ class ClientOut(BaseModel):
     contact_name: str | None
     contact_email: str | None
     contact_phone: str | None
+    contact_phone_mobile: str | None
     username: str
     api_key_prefix: str | None
     webhook_url: str | None

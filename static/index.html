@@ -152,9 +152,10 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
           <div class="field"><label>Cidade</label><input id="cliCadCity"></div>
         </div>
         <div class="field" style="max-width:120px"><label>UF</label><input id="cliCadState" maxlength="2"></div>
+        <div class="field"><label>Nome do contato</label><input id="cliCadContactName"></div>
         <div class="grid g2">
-          <div class="field"><label>Nome do contato</label><input id="cliCadContactName"></div>
-          <div class="field"><label>Telefone</label><input id="cliCadPhone" placeholder="(11) 98765-4321"></div>
+          <div class="field"><label>Telefone Fixo (opcional)</label><input id="cliCadPhoneFixo" placeholder="(11) 2345-6789"></div>
+          <div class="field"><label>Telefone Celular (opcional)</label><input id="cliCadPhoneCelular" placeholder="(11) 92345-6789"></div>
         </div>
         <div class="field"><label>E-mail (login do cliente) *</label><input id="cliCadEmail" type="email"></div>
         <br><button id="saveCliCadastro" class="action">Cadastrar cliente</button>
@@ -450,9 +451,11 @@ $('cliRelSearch').addEventListener('input', renderCliRelatorios);
 // --------------------------- Cliente > Cadastrar Cliente ---------------------------
 // POST /api/v1/clients (admin, Supervisor+ — ver app/api/admin_clients.py).
 // Mesmos padrões brasileiros usados no resto do Admin: CEP com autopreenchimento
-// via ViaCEP, campo único CPF/CNPJ e campo único fixo/celular (br-utils.js).
+// via ViaCEP, campo único CPF/CNPJ e telefone fixo/celular em campos separados,
+// os dois opcionais (br-utils.js).
 liveMask($('cliCadTax'), maskCpfCnpj);
-liveMask($('cliCadPhone'), maskPhone);
+liveMask($('cliCadPhoneFixo'), maskPhoneFixo);
+liveMask($('cliCadPhoneCelular'), maskPhoneCelular);
 attachCepAutofill('cliCadZip', {
   street: 'cliCadStreet', district: 'cliCadDistrict', city: 'cliCadCity', state: 'cliCadState',
 });
@@ -460,7 +463,7 @@ attachCepAutofill('cliCadZip', {
 function clearCliCadastroForm() {
   ['cliCadTax', 'cliCadLegal', 'cliCadTrade', 'cliCadZip', 'cliCadStreet', 'cliCadNumber',
     'cliCadComplement', 'cliCadDistrict', 'cliCadCity', 'cliCadState', 'cliCadContactName',
-    'cliCadPhone', 'cliCadEmail'].forEach(id => { $(id).value = ''; });
+    'cliCadPhoneFixo', 'cliCadPhoneCelular', 'cliCadEmail'].forEach(id => { $(id).value = ''; });
   $('cliCadPersonType').selectedIndex = 0;
   $('cliCadMsg').textContent = '';
 }
@@ -478,7 +481,9 @@ $('saveCliCadastro').onclick = async () => {
         address_street: $('cliCadStreet').value || null, address_number: $('cliCadNumber').value || null,
         address_complement: $('cliCadComplement').value || null, address_district: $('cliCadDistrict').value || null,
         city: $('cliCadCity').value || null, state: $('cliCadState').value || null,
-        contact_name: $('cliCadContactName').value || null, contact_phone: onlyDigits($('cliCadPhone').value) || null,
+        contact_name: $('cliCadContactName').value || null,
+        contact_phone: onlyDigits($('cliCadPhoneFixo').value) || null,
+        contact_phone_mobile: onlyDigits($('cliCadPhoneCelular').value) || null,
         contact_email: $('cliCadEmail').value,
       })
     });

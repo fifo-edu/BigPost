@@ -341,7 +341,10 @@ class Client(Base):
     # por e-mail — não existe mais um campo de login separado; um Client é
     # uma conta só, então reaproveitar o contato evita duplicar o dado).
     contact_email: Mapped[str | None] = mapped_column(String(160))
-    contact_phone: Mapped[str | None] = mapped_column(String(30))
+    contact_phone: Mapped[str | None] = mapped_column(String(30))  # telefone fixo
+    # Desde 2026-09-12, separado do fixo acima (pedido do usuário) — os dois
+    # são opcionais, ver migration 0008.
+    contact_phone_mobile: Mapped[str | None] = mapped_column(String(30))
 
     # Desde 2026-09-10, username == contact_email nas contas novas (nullable
     # pra não quebrar contas antigas nem a conta técnica de modo suporte,
