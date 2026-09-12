@@ -305,6 +305,7 @@ $('supportCancel').onclick = async () => {
 };
 
 liveMask($('rTax'), maskCpfCnpj);
+liveMask($('rPhone'), maskPhoneGeneric);
 attachCepAutofill('rZip', { street: 'rStreet', district: 'rDistrict', city: 'rCity', state: 'rState' });
 
 S.recreatingId = null;
@@ -313,7 +314,7 @@ function shipmentPayload() {
   return {
     external_reference: $('pRef').value || null,
     recipient_name: $('rName').value, recipient_tax_id: onlyDigits($('rTax').value) || null,
-    recipient_phone: $('rPhone').value || null, recipient_email: $('rEmail').value || null,
+    recipient_phone: onlyDigits($('rPhone').value) || null, recipient_email: $('rEmail').value || null,
     recipient_zip: onlyDigits($('rZip').value),
     recipient_street: $('rStreet').value || null, recipient_number: $('rNumber').value || null,
     recipient_complement: $('rComplement').value || null, recipient_district: $('rDistrict').value || null,
@@ -366,7 +367,7 @@ window.prepararRecriar = async (id) => {
     const s = await api(`/api/v1/cliente/shipments/${id}`);
     limparFormEmissao();
     $('rName').value = s.recipient_name || '';
-    $('rZip').value = s.recipient_zip || '';
+    $('rZip').value = maskCEP(s.recipient_zip || '');
     $('rCity').value = s.recipient_city || '';
     $('rState').value = s.recipient_state || '';
     $('pService').value = s.service_type || '';

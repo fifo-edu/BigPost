@@ -382,7 +382,7 @@ function render() {
     $('bbAgreement').value = bc.agreement || ''; $('bbWallet').value = bc.wallet || '';
     $('bbAgency').value = bc.agency || ''; $('bbAccount').value = bc.account_no || '';
     $('bbDigit').value = bc.account_digit || ''; $('bbLayout').value = bc.cnab_layout || 'A DEFINIR';
-    $('bbBeneficiary').value = bc.beneficiary_name || ''; $('bbBeneficiaryTax').value = bc.beneficiary_tax_id || '';
+    $('bbBeneficiary').value = bc.beneficiary_name || ''; $('bbBeneficiaryTax').value = maskCNPJ(bc.beneficiary_tax_id || '');
   }
 
   $('remTable').innerHTML = (S.remittances || []).map(x => `<tr><td>${esc(x.file_name)}</td><td>${esc(x.reference_month)}</td><td>${x.total_titles}</td><td>${formatBRL(x.total_amount)}</td><td>${esc(x.status)}</td></tr>`).join('');
@@ -580,7 +580,7 @@ function renderLicenseeEditPanel(licenseeId) {
       </div>
       <div class="section-title">Endereço</div>
       <div class="grid g2">
-        <div class="field"><label>CEP</label><input id="lcZip_${licenseeId}" maxlength="9" placeholder="00000-000" value="${esc(l.zip_code || '')}"></div>
+        <div class="field"><label>CEP</label><input id="lcZip_${licenseeId}" maxlength="9" placeholder="00000-000" value="${esc(maskCEP(l.zip_code || ''))}"></div>
         <div class="field"><label>Rua/Av</label><input id="lcStreet_${licenseeId}" value="${esc(l.address_street || '')}"></div>
       </div>
       <div class="grid">
@@ -599,11 +599,11 @@ function renderLicenseeEditPanel(licenseeId) {
       </div>
       <div class="grid g2">
         <div class="field"><label>E-mail de contato</label><input id="lcContactEmail_${licenseeId}" value="${esc(l.contact_email || '')}"></div>
-        <div class="field"><label>Telefone de contato</label><input id="lcContactPhone_${licenseeId}" value="${esc(l.contact_phone || '')}"></div>
+        <div class="field"><label>Telefone de contato</label><input id="lcContactPhone_${licenseeId}" value="${esc(maskPhoneGeneric(l.contact_phone || ''))}"></div>
       </div>
       <div class="grid g2">
         <div class="field"><label>E-mail de cobrança</label><input id="lcBillingEmail_${licenseeId}" value="${esc(l.billing_email || '')}"></div>
-        <div class="field"><label>Telefone de cobrança</label><input id="lcBillingPhone_${licenseeId}" value="${esc(l.billing_phone || '')}"></div>
+        <div class="field"><label>Telefone de cobrança</label><input id="lcBillingPhone_${licenseeId}" value="${esc(maskPhoneGeneric(l.billing_phone || ''))}"></div>
       </div>
       <div class="field"><label>Website</label><input id="lcWebsite_${licenseeId}" value="${esc(l.website || '')}"></div>
       <div class="section-title">Observações (visível somente para Master)</div>
@@ -616,6 +616,8 @@ function renderLicenseeEditPanel(licenseeId) {
     street: 'lcStreet_' + licenseeId, district: 'lcDistrict_' + licenseeId,
     city: 'lcCity_' + licenseeId, state: 'lcState_' + licenseeId,
   });
+  liveMask($('lcContactPhone_' + licenseeId), maskPhoneGeneric);
+  liveMask($('lcBillingPhone_' + licenseeId), maskPhoneGeneric);
 }
 
 async function saveLicenseeEdit(licenseeId) {
@@ -635,9 +637,9 @@ async function saveLicenseeEdit(licenseeId) {
     contact_name: $('lcContactName_' + licenseeId).value || null,
     contact_role: $('lcContactRole_' + licenseeId).value || null,
     contact_email: $('lcContactEmail_' + licenseeId).value || null,
-    contact_phone: $('lcContactPhone_' + licenseeId).value || null,
+    contact_phone: onlyDigits($('lcContactPhone_' + licenseeId).value) || null,
     billing_email: $('lcBillingEmail_' + licenseeId).value || null,
-    billing_phone: $('lcBillingPhone_' + licenseeId).value || null,
+    billing_phone: onlyDigits($('lcBillingPhone_' + licenseeId).value) || null,
     website: $('lcWebsite_' + licenseeId).value || null,
     notes: $('lcNotes_' + licenseeId).value || null,
   };
@@ -800,7 +802,7 @@ $('saveBBConfig').onclick = async () => {
   try {
     await api('/api/v1/bank/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       agreement: $('bbAgreement').value, wallet: $('bbWallet').value, agency: $('bbAgency').value, account_no: $('bbAccount').value,
-      account_digit: $('bbDigit').value, cnab_layout: $('bbLayout').value, beneficiary_name: $('bbBeneficiary').value, beneficiary_tax_id: $('bbBeneficiaryTax').value,
+      account_digit: $('bbDigit').value, cnab_layout: $('bbLayout').value, beneficiary_name: $('bbBeneficiary').value, beneficiary_tax_id: onlyDigits($('bbBeneficiaryTax').value),
     }) });
     await loadAll(); alert('Configuração salva.');
   } catch (e) { alert(e.message); }

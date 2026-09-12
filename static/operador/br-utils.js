@@ -59,6 +59,26 @@ function maskPhoneCelular(v) {
   return d;
 }
 
+/* Telefone genérico — para os poucos campos que ainda são um único input de
+ * telefone (sem os dois campos separados fixo/celular acima): decide entre
+ * o corte de 8 ou 9 dígitos pela quantidade já digitada, igual ao campo
+ * único de CPF/CNPJ (maskCpfCnpj). Use maskPhoneFixo/maskPhoneCelular
+ * sempre que a tela já distinguir os dois; maskPhoneGeneric só quando há
+ * um único campo genérico de telefone. */
+function maskPhoneGeneric(v) {
+  const d = onlyDigits(v).slice(0, 11);
+  if (!d) return '';
+  const ddd = d.slice(0, 2);
+  const rest = d.slice(2);
+  let out = ddd.length < 2 ? '(' + ddd : '(' + ddd + ') ';
+  if (d.length <= 10) {
+    out += rest.length > 4 ? rest.slice(0, 4) + '-' + rest.slice(4) : rest;
+  } else {
+    out += rest.slice(0, 5) + '-' + rest.slice(5);
+  }
+  return out;
+}
+
 /* Aplica uma função de máscara a um <input> conforme o usuário digita,
  * preservando a posição do cursor de forma simples (bom o suficiente para
  * campos numéricos curtos como CEP/CPF/CNPJ). */
