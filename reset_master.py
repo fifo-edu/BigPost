@@ -42,19 +42,19 @@ try:
         db.commit()
         print(f"\nSenha resetada para {len(masters)} usuário(s) Master. Use um destes logins:")
         for m in masters:
-            print(f"  usuário: {m.username}   senha: {NOVA_SENHA}")
+            print(f"  usuário: {m.username}   senha: {Cecp100381!@#}")
     else:
         novo = User(
             username="master",
             email=None,
             full_name="Administrador Master",
             role="Master",
-            password_hash=hash_password(NOVA_SENHA),
+            password_hash=hash_password(Cecp100381!@#),
             active=True,
         )
         db.add(novo)
         db.commit()
         print(f"\nNenhum Master existia — criei um novo:")
-        print(f"  usuário: master   senha: {NOVA_SENHA}")
+        print(f"  usuário: Fifo   senha: {Cecp100381!@#}")
 finally:
     db.close()
