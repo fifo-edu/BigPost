@@ -158,6 +158,17 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
           <div class="field"><label>Telefone Celular (opcional)</label><input id="cliCadPhoneCelular" placeholder="(11) 92345-6789"></div>
         </div>
         <div class="field"><label>E-mail (login do cliente) *</label><input id="cliCadEmail" type="email"></div>
+        <h3>Contrato dos Correios do cliente (CWS)</h3>
+        <p class="notice">Estes dados são exclusivos deste cliente. O código de acesso será armazenado criptografado. Esta credencial CWS é diferente do login Correios Atende da agência.</p>
+        <div class="grid g2">
+          <div class="field"><label>Usuário CWS *</label><input id="cliCadCorreiosUser" required></div>
+          <div class="field"><label>Código de acesso CWS *</label><input id="cliCadCorreiosAccess" type="password" required></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Cartão de postagem *</label><input id="cliCadCorreiosCard" required></div>
+          <div class="field"><label>Número do contrato *</label><input id="cliCadCorreiosContract" required></div>
+        </div>
+        <div class="field" style="max-width:160px"><label>Diretoria Regional (DR) *</label><input id="cliCadCorreiosDr" type="number" min="1" value="74" required></div>
         <br><button id="saveCliCadastro" class="action">Cadastrar cliente</button>
         <p id="cliCadMsg" style="color:#a53030"></p>
       </div>
@@ -463,8 +474,10 @@ attachCepAutofill('cliCadZip', {
 function clearCliCadastroForm() {
   ['cliCadTax', 'cliCadLegal', 'cliCadTrade', 'cliCadZip', 'cliCadStreet', 'cliCadNumber',
     'cliCadComplement', 'cliCadDistrict', 'cliCadCity', 'cliCadState', 'cliCadContactName',
-    'cliCadPhoneFixo', 'cliCadPhoneCelular', 'cliCadEmail'].forEach(id => { $(id).value = ''; });
+    'cliCadPhoneFixo', 'cliCadPhoneCelular', 'cliCadEmail', 'cliCadCorreiosUser',
+    'cliCadCorreiosAccess', 'cliCadCorreiosCard', 'cliCadCorreiosContract'].forEach(id => { $(id).value = ''; });
   $('cliCadPersonType').selectedIndex = 0;
+  $('cliCadCorreiosDr').value = '74';
   $('cliCadMsg').textContent = '';
 }
 
@@ -485,6 +498,13 @@ $('saveCliCadastro').onclick = async () => {
         contact_phone: onlyDigits($('cliCadPhoneFixo').value) || null,
         contact_phone_mobile: onlyDigits($('cliCadPhoneCelular').value) || null,
         contact_email: $('cliCadEmail').value,
+        correios_credential: {
+          correios_username: $('cliCadCorreiosUser').value,
+          access_code: $('cliCadCorreiosAccess').value,
+          postal_card: $('cliCadCorreiosCard').value,
+          contract_number: $('cliCadCorreiosContract').value,
+          dr: parseInt($('cliCadCorreiosDr').value, 10),
+        },
       })
     });
     clearCliCadastroForm();

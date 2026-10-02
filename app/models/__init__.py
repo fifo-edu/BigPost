@@ -6,6 +6,7 @@ from app.models.models import (  # noqa: F401
     BankImport,
     Charge,
     Client,
+    ClientContractCredential,
     ClientCorreiosCredential,
     CorreiosCredential,
     License,

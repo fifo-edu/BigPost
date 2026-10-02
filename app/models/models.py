@@ -374,6 +374,25 @@ class Client(Base):
     )
 
 
+class ClientContractCredential(Base):
+    """Credenciais CWS dos Correios vinculadas ao contrato de cada cliente."""
+
+    __tablename__ = "client_contract_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False, unique=True)
+    correios_username: Mapped[str] = mapped_column(String(120), nullable=False)
+    access_code_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    postal_card: Mapped[str] = mapped_column(String(20), nullable=False)
+    contract_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    dr: Mapped[int] = mapped_column(Integer, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_validated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
+    created_by: Mapped[str | None] = mapped_column(String(80))
+
+
 # ---------------------------------------------------------------------------
 # Encomendas/etiquetas emitidas pelos clientes e processadas pela agência.
 # Fluxo: Cliente cria (Pendente) -> Agência afere peso/valor (Aferido) ->

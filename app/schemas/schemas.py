@@ -408,6 +408,14 @@ class ClientCreate(BaseModel):
     contact_phone_mobile: str | None = None  # telefone celular, opcional
 
 
+class ClientContractCredentialCreate(BaseModel):
+    correios_username: str = Field(min_length=1, max_length=120)
+    access_code: str = Field(min_length=1)
+    postal_card: str = Field(min_length=1, max_length=20)
+    contract_number: str = Field(min_length=1, max_length=20)
+    dr: int = Field(gt=0)
+
+
 class ClientOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -455,6 +463,7 @@ class ClientAdminCreate(ClientCreate):
     sessão logada, não do corpo da requisição)."""
 
     licensee_id: int
+    correios_credential: ClientContractCredentialCreate
 
 
 class ClientApiKeyOut(BaseModel):

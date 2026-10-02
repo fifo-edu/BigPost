@@ -32,7 +32,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.models import ClientCorreiosCredential, Shipment
+from app.models.models import ClientContractCredential, ClientCorreiosCredential, Shipment
 from app.services.crypto import decrypt
 
 # Confirmado no Swagger autenticado do CWS (grupo "Token"):
@@ -81,7 +81,7 @@ class _CachedToken:
 # workers/processos, cada um terá seu próprio cache (token extra sendo
 # gerado não é um problema — os Correios permitem múltiplos tokens válidos
 # simultâneos por credencial).
-_token_cache: dict[int, _CachedToken] = {}
+_token_cache: dict[tuple[str, int], _CachedToken] = {}
 _cache_lock = threading.Lock()
 
 
@@ -146,42 +146,46 @@ def _autenticar_cartao_postagem(
     return _CachedToken(token=token, expires_at=_parse_expira_em(data.get("expiraEm")))
 
 
-def get_valid_token(db: Session, licensee_id: int, *, force_refresh: bool = False) -> str:
-    """Retorna um token Bearer válido do CWS para o licenciado, reaproveitando
-    o cache em memória enquanto não estiver perto de expirar. Gera um novo
-    via /v1/autentica/cartaopostagem quando necessário.
+def get_valid_token(
+    db: Session, licensee_id: int, *, client_id: int | None = None, force_refresh: bool = False
+) -> str:
+    """Retorna um token CWS válido, usando o contrato do cliente quando
+    `client_id` for informado e a credencial legada da agência caso contrário.
+    Reaproveita o cache até o token se aproximar da expiração.
 
     Levanta CorreiosCWSError se:
-      - não houver credencial cadastrada/ativa para o licenciado;
+      - não houver credencial cadastrada/ativa para o cliente ou licenciado;
       - a credencial estiver sem código de acesso ou sem DR cadastrados;
       - os Correios recusarem a autenticação (credencial errada, DR errado,
         cartão de postagem vencido/inválido, etc.).
     """
+    cache_key = ("client", client_id) if client_id is not None else ("licensee", licensee_id)
     if not force_refresh:
         with _cache_lock:
-            cached = _token_cache.get(licensee_id)
+            cached = _token_cache.get(cache_key)
         if cached and datetime.utcnow() < cached.expires_at - TOKEN_REFRESH_MARGIN:
             return cached.token
 
-    cred = (
-        db.query(ClientCorreiosCredential)
-        .filter(ClientCorreiosCredential.licensee_id == licensee_id)
-        .first()
-    )
+    if client_id is not None:
+        cred = db.query(ClientContractCredential).filter(ClientContractCredential.client_id == client_id).first()
+        access_code_encrypted = cred.access_code_encrypted if cred else None
+        owner = "cliente"
+    else:
+        cred = db.query(ClientCorreiosCredential).filter(ClientCorreiosCredential.licensee_id == licensee_id).first()
+        access_code_encrypted = cred.token_encrypted if cred else None
+        owner = "licenciado"
     if not cred or not cred.active:
+        raise CorreiosCWSError(f"Nenhuma credencial CWS ativa cadastrada para este {owner}.")
+    if not access_code_encrypted:
         raise CorreiosCWSError(
-            "Nenhuma credencial de Correios (BigPost Cliente) ativa cadastrada para este licenciado."
-        )
-    if not cred.token_encrypted:
-        raise CorreiosCWSError(
-            "Credencial Correios cadastrada sem código de acesso — atualize em Licenças → BigPost."
+            f"Credencial CWS do {owner} cadastrada sem código de acesso."
         )
     if not cred.dr:
         raise CorreiosCWSError(
-            "Credencial Correios sem Diretoria Regional (DR) cadastrada — necessária para autenticar no CWS."
+            f"Credencial CWS do {owner} sem Diretoria Regional (DR), necessária para autenticação."
         )
 
-    codigo_acesso = decrypt(cred.token_encrypted)
+    codigo_acesso = decrypt(access_code_encrypted)
     if codigo_acesso is None:
         raise CorreiosCWSError("Não foi possível decifrar o código de acesso salvo — recadastre a credencial.")
 
@@ -193,7 +197,7 @@ def get_valid_token(db: Session, licensee_id: int, *, force_refresh: bool = Fals
     )
 
     with _cache_lock:
-        _token_cache[licensee_id] = cached_token
+        _token_cache[cache_key] = cached_token
 
     cred.last_validated_at = datetime.utcnow()
     db.commit()
@@ -228,13 +232,13 @@ def criar_pre_postagem(db: Session, licensee_id: int, shipment: Shipment) -> dic
          Token, mas não confirmado para este endpoint).
 
     Assim que esse contrato estiver confirmado, esta função deve:
-      - obter um token válido via `get_valid_token(db, licensee_id)`;
-      - montar o corpo confirmado e chamar `httpx.post(...)` com header
-        Authorization: Bearer <token>;
-      - tratar erro com o mesmo padrão de `_extract_error`/CorreiosCWSError
-        usado acima;
-      - devolver um dict com pelo menos `tracking_code` (e a etiqueta, se
-        vier), pra `postar_shipment` gravar em `shipment.tracking_code`.
+    - obter um token válido via `get_valid_token(db, licensee_id, client_id=shipment.client_id)`;
+        - montar o corpo confirmado e chamar `httpx.post(...)` com header
+            Authorization: Bearer <token>;
+        - tratar erro com o mesmo padrão de `_extract_error`/CorreiosCWSError
+            usado acima;
+        - devolver um dict com pelo menos `tracking_code` (e a etiqueta, se
+            vier), pra `postar_shipment` gravar em `shipment.tracking_code`.
     """
     raise NotImplementedError(
         "Pré-Postagem ainda não implementada: falta confirmar o contrato exato "

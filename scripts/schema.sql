@@ -166,6 +166,23 @@ CREATE TABLE clients (
     UNIQUE (licensee_id, username)
 );
 
+-- Credenciais CWS próprias de cada cliente (separadas do Correios Atende
+-- da agência e das credenciais legadas por licenciado).
+CREATE TABLE client_contract_credentials (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER NOT NULL UNIQUE REFERENCES clients(id),
+    correios_username VARCHAR(120) NOT NULL,
+    access_code_encrypted TEXT NOT NULL,
+    postal_card VARCHAR(20) NOT NULL,
+    contract_number VARCHAR(20) NOT NULL,
+    dr INTEGER NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_validated_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_by VARCHAR(80)
+);
+
 -- Encomendas/etiquetas emitidas por um cliente, processadas pela agência.
 CREATE TABLE shipments (
     id SERIAL PRIMARY KEY,

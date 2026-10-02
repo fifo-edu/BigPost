@@ -16,6 +16,7 @@ FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Sem dependências externas de a
 - `users` — equipe interna do BigPost (papéis: Master, Supervisor, Operador).
 - `licensees` — agências franqueadas licenciadas. Cadastro detalhado (endereço completo, pessoa de contato, dados de cobrança) + **MCU** (código de 8 dígitos que identifica a franqueada nos Correios — o resto já é dado de CNPJ/endereço).
 - `correios_credentials` — usuário/senha (e token) do site **www.correiosatende.correios.com.br**, por agência, **criptografados em repouso** (Fernet) — nunca devolvidos em texto puro pela API.
+- `client_contract_credentials` — usuário, código de acesso CWS (criptografado), cartão de postagem, contrato e DR próprios de cada cliente final; cadastrados junto ao cliente no Admin. Não confundir com o login Correios Atende da agência.
 - `licensee_users` — equipe de uma agência, compartilhada pelos portais Agência e Operador. Hierarquia de 5 papéis: **Master > Administrador > Financeiro > {Operador de Caixa, Expedição}** (esses dois últimos em pé de igualdade — um não manda no outro); os 3 primeiros usam o portal Agência, os 2 últimos o portal Operador. Login próprio, cookie `session_agencia`.
 - `clients` — clientes de uma agência (módulo Cliente): quem emite etiqueta com ela. Cadastro detalhado (endereço, contato) + login próprio (usuário/senha, cookie `session_cliente`) + **API key** (`bp_live_...`) para integração programática.
 - `shipments` — encomendas/etiquetas: dados do destinatário e do pacote (declarados pelo cliente na emissão), depois peso/preço confirmados e código de rastreio (preenchidos pela agência). Status: `Pendente → Aferido → Postado → Em Trânsito → Entregue` (ou `Devolvido`/`Cancelado`).
@@ -161,7 +162,7 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Depois de subir, cadastre o licenciado e a licença pelo Painel Master (sistema externo — ver seção "Integração com o Painel Master" acima) ou, em dev, direto via `POST /api/v1/integrations/painel-master/licensees` com a `X-API-Key`. Pelo portal admin (`/`) cadastre o primeiro usuário `Master` da agência na tela "Licenciados" (que já pode logar em `/agencia/`, se for Administrador/Financeiro, ou `/operador/`, se for Operador de Caixa/Expedição — o papel escolhido decide qual portal ele usa) e, se aplicável, as credenciais do Correios Atende.
+Depois de subir, cadastre o licenciado e a licença pelo Painel Master (sistema externo — ver seção "Integração com o Painel Master" acima) ou, em dev, direto via `POST /api/v1/integrations/painel-master/licensees` com a `X-API-Key`. Pelo portal admin (`/`) cadastre o primeiro usuário `Master` da agência na tela "Licenciados" (que já pode logar em `/agencia/`, se for Administrador/Financeiro, ou `/operador/`, se for Operador de Caixa/Expedição — o papel escolhido decide qual portal ele usa) e, se aplicável, as credenciais do Correios Atende. O cadastro de cliente fica em `Cliente > Cadastrar Cliente` e inclui o contrato CWS individual.
 
 ### Migrando os dados do protótipo antigo ("Gestão Financeira Master")
 
@@ -198,5 +199,5 @@ static/       # 4 portais HTML/JS puro, sem build step (+ br-utils.js compartilh
 1. Rodar o smoke test completo numa máquina com internet (Docker é o caminho mais rápido) e testar os três portais num navegador de verdade.
 2. Trocar `JWT_SECRET` e a senha do usuário Master antes de qualquer uso real.
 3. Colocar atrás de HTTPS antes de aceitar tráfego de fora da rede local (`COOKIE_SECURE=true`).
-4. Integração real com os Correios: hoje o código de rastreio é lançado manualmente pela agência (`POST /api/v1/agencia/shipments/{id}/postar`) — o próximo passo natural é automatizar isso (geração de etiqueta e postagem via API dos Correios, usando as credenciais do Correios Atende já cadastradas) e plugar rastreio automático (que hoje é lançado manualmente via `POST /api/v1/agencia/shipments/{id}/eventos`).
+4. Integração real com os Correios: a autenticação CWS usa o contrato individual cadastrado para o cliente, mas a Pré-Postagem ainda não está implementada porque o contrato da API precisa ser confirmado. Hoje o código de rastreio é lançado manualmente pela agência (`POST /api/v1/agencia/shipments/{id}/postar`); depois da Pré-Postagem, plugar também o rastreio automático (`POST /api/v1/agencia/shipments/{id}/eventos` hoje é manual).
 5. Entrega de webhook hoje é síncrona/best-effort (uma tentativa, sem retry automático) — evoluir para uma fila com retry usando o log em `webhook_deliveries`.

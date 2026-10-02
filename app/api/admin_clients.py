@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import UNUSABLE_PASSWORD_HASH, require_role
-from app.models.models import Client, Licensee, User
+from app.models.models import Client, ClientContractCredential, Licensee, User
 from app.schemas.schemas import ClientAdminCreate, ClientAdminOut, ClientCreateOut, ClientOut
 from app.services.audit import log_action
+from app.services.crypto import encrypt
 from app.services.password_tokens import issue_and_notify
 from app.services.support_access import SUPPORT_USERNAME
 
@@ -54,8 +55,8 @@ def create_client_admin(
     Cadastrar Cliente (ver static/index.html). Pedido do usuário: mesmo que o
     cadastro normal já seja feito pelo portal da Agência, a equipe BigPost
     também precisa conseguir cadastrar direto por aqui, escolhendo a qual
-    licenciado o cliente pertence (`licensee_id` no corpo, único campo a mais
-    em relação ao `ClientCreate` usado pela Agência).
+    licenciado o cliente pertence (`licensee_id` no corpo), além da credencial
+    CWS própria do cliente, que não faz parte do cadastro feito pela Agência.
 
     Mesma regra de sempre-por-e-mail: quem cadastra não define senha, o
     cliente recebe um convite pra definir a própria (ver
@@ -66,7 +67,7 @@ def create_client_admin(
 
     email = payload.contact_email.strip().lower()
     client = Client(
-        **payload.model_dump(exclude={"contact_email", "licensee_id"}),
+        **payload.model_dump(exclude={"contact_email", "licensee_id", "correios_credential"}),
         licensee_id=payload.licensee_id,
         contact_email=email,
         username=email,
@@ -75,6 +76,18 @@ def create_client_admin(
     )
     db.add(client)
     try:
+        db.flush()
+        db.add(
+            ClientContractCredential(
+                client_id=client.id,
+                correios_username=payload.correios_credential.correios_username,
+                access_code_encrypted=encrypt(payload.correios_credential.access_code),
+                postal_card=payload.correios_credential.postal_card,
+                contract_number=payload.correios_credential.contract_number,
+                dr=payload.correios_credential.dr,
+                created_by=user.username,
+            )
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -89,7 +102,13 @@ def create_client_admin(
         role=user.role,
         action="CADASTRAR_CLIENTE",
         entity=f"client:{client.id}",
-        after={"legal_name": client.legal_name, "tax_id": client.tax_id, "licensee_id": licensee.id, "convite_emailed": emailed},
+        after={
+            "legal_name": client.legal_name,
+            "tax_id": client.tax_id,
+            "licensee_id": licensee.id,
+            "correios_contract": payload.correios_credential.contract_number,
+            "convite_emailed": emailed,
+        },
         origin="Admin",
         ip_address=client_ip(request),
     )
