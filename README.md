@@ -1,6 +1,6 @@
 # BigPost
 
-ERP de criação, emissão e gerenciamento de postagens via Correios, para agências franqueadas (AGF). O cadastro/licenciamento de agências é feito num sistema externo (Painel Master — ver seção própria abaixo); este projeto cobre a operação de quem já está licenciado, com quatro frentes:
+Módulo operacional de criação, emissão e gerenciamento de postagens via Correios para agências franqueadas (AGF). O cadastro/licenciamento das agências é feito num sistema externo (Painel Master — ver seção própria abaixo); o BigPost não licencia agências: ele oferece às agências já licenciadas as ferramentas para operar suas postagens e clientes, com quatro frentes:
 
 - **Administração interna** (equipe do BigPost): usuários da agência, credenciais Correios, cobrança, parametrização.
 - **Módulo Agência** (papéis Master, Administrador, Financeiro): gestão da agência — cadastro de clientes, relação com os módulos Cliente e Operador.
@@ -16,7 +16,7 @@ FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Sem dependências externas de a
 - `users` — equipe interna do BigPost (papéis: Master, Supervisor, Operador).
 - `licensees` — agências franqueadas licenciadas. Cadastro detalhado (endereço completo, pessoa de contato, dados de cobrança) + **MCU** (código de 8 dígitos que identifica a franqueada nos Correios — o resto já é dado de CNPJ/endereço).
 - `correios_credentials` — usuário/senha (e token) do site **www.correiosatende.correios.com.br**, por agência, **criptografados em repouso** (Fernet) — nunca devolvidos em texto puro pela API.
-- `client_contract_credentials` — usuário, código de acesso CWS (criptografado), cartão de postagem, contrato e DR próprios de cada cliente final; cadastrados junto ao cliente no Admin. Não confundir com o login Correios Atende da agência.
+- `client_contract_credentials` — usuário, código de acesso CWS (criptografado), cartão de postagem, contrato e DR próprios de cada cliente final; cadastrados pela agência no portal Agência junto ao cadastro do cliente. Não confundir com o login Correios Atende da agência.
 - `licensee_users` — equipe de uma agência, compartilhada pelos portais Agência e Operador. Hierarquia de 5 papéis: **Master > Administrador > Financeiro > {Operador de Caixa, Expedição}** (esses dois últimos em pé de igualdade — um não manda no outro); os 3 primeiros usam o portal Agência, os 2 últimos o portal Operador. Login próprio, cookie `session_agencia`.
 - `clients` — clientes de uma agência (módulo Cliente): quem emite etiqueta com ela. Cadastro detalhado (endereço, contato) + login próprio (usuário/senha, cookie `session_cliente`) + **API key** (`bp_live_...`) para integração programática.
 - `shipments` — encomendas/etiquetas: dados do destinatário e do pacote (declarados pelo cliente na emissão), depois peso/preço confirmados e código de rastreio (preenchidos pela agência). Status: `Pendente → Aferido → Postado → Em Trânsito → Entregue` (ou `Devolvido`/`Cancelado`).
@@ -162,7 +162,7 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Depois de subir, cadastre o licenciado e a licença pelo Painel Master (sistema externo — ver seção "Integração com o Painel Master" acima) ou, em dev, direto via `POST /api/v1/integrations/painel-master/licensees` com a `X-API-Key`. Pelo portal admin (`/`) cadastre o primeiro usuário `Master` da agência na tela "Licenciados" (que já pode logar em `/agencia/`, se for Administrador/Financeiro, ou `/operador/`, se for Operador de Caixa/Expedição — o papel escolhido decide qual portal ele usa) e, se aplicável, as credenciais do Correios Atende. O cadastro de cliente fica em `Cliente > Cadastrar Cliente` e inclui o contrato CWS individual.
+Depois de subir, cadastre o licenciado e a licença pelo Painel Master (sistema externo — ver seção "Integração com o Painel Master" acima) ou, em dev, direto via `POST /api/v1/integrations/painel-master/licensees` com a `X-API-Key`. Pelo portal admin (`/`) cadastre o primeiro usuário `Master` da agência na tela "Licenciados" (que já pode logar em `/agencia/`, se for Administrador/Financeiro, ou `/operador/`, se for Operador de Caixa/Expedição — o papel escolhido decide qual portal ele usa) e, se aplicável, as credenciais do Correios Atende. Depois, a própria agência cadastra seus clientes e respectivos contratos CWS no menu "Clientes" do portal `/agencia/`.
 
 ### Migrando os dados do protótipo antigo ("Gestão Financeira Master")
 

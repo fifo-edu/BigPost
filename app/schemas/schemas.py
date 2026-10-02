@@ -383,6 +383,14 @@ class SupportEnterRequest(BaseModel):
 
 
 # --------------------------- Clientes de cada agência ---------------------------
+class ClientContractCredentialCreate(BaseModel):
+    correios_username: str = Field(min_length=1, max_length=120)
+    access_code: str = Field(min_length=1)
+    postal_card: str = Field(min_length=1, max_length=20)
+    contract_number: str = Field(min_length=1, max_length=20)
+    dr: int = Field(gt=0)
+
+
 class ClientCreate(BaseModel):
     """Desde 2026-09-10, cadastro sempre por e-mail: `contact_email` é ao
     mesmo tempo o contato E o login desse cliente (um Client = uma conta só,
@@ -406,14 +414,7 @@ class ClientCreate(BaseModel):
     contact_email: EmailStr
     contact_phone: str | None = None  # telefone fixo, opcional
     contact_phone_mobile: str | None = None  # telefone celular, opcional
-
-
-class ClientContractCredentialCreate(BaseModel):
-    correios_username: str = Field(min_length=1, max_length=120)
-    access_code: str = Field(min_length=1)
-    postal_card: str = Field(min_length=1, max_length=20)
-    contract_number: str = Field(min_length=1, max_length=20)
-    dr: int = Field(gt=0)
+    correios_credential: ClientContractCredentialCreate
 
 
 class ClientOut(BaseModel):
@@ -463,7 +464,6 @@ class ClientAdminCreate(ClientCreate):
     sessão logada, não do corpo da requisição)."""
 
     licensee_id: int
-    correios_credential: ClientContractCredentialCreate
 
 
 class ClientApiKeyOut(BaseModel):

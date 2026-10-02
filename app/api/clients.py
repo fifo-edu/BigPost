@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import UNUSABLE_PASSWORD_HASH, require_licensee_role
-from app.models.models import Client, LicenseeUser
+from app.models.models import Client, ClientContractCredential, LicenseeUser
 from app.schemas.schemas import ClientCreate, ClientCreateOut, ClientOut, PasswordLinkOut
 from app.services.audit import log_action
+from app.services.crypto import encrypt
 from app.services.password_tokens import issue_and_notify
 from app.services.support_access import SUPPORT_USERNAME
 
@@ -43,7 +44,7 @@ def create_client(
     email = payload.contact_email.strip().lower()
     client = Client(
         licensee_id=user.licensee_id,
-        **payload.model_dump(exclude={"contact_email"}),
+        **payload.model_dump(exclude={"contact_email", "correios_credential"}),
         contact_email=email,
         username=email,
         password_hash=UNUSABLE_PASSWORD_HASH,
@@ -51,6 +52,18 @@ def create_client(
     )
     db.add(client)
     try:
+        db.flush()
+        db.add(
+            ClientContractCredential(
+                client_id=client.id,
+                correios_username=payload.correios_credential.correios_username,
+                access_code_encrypted=encrypt(payload.correios_credential.access_code),
+                postal_card=payload.correios_credential.postal_card,
+                contract_number=payload.correios_credential.contract_number,
+                dr=payload.correios_credential.dr,
+                created_by=user.username,
+            )
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -65,7 +78,12 @@ def create_client(
         role=user.role,
         action="CADASTRAR_CLIENTE",
         entity=f"client:{client.id}",
-        after={"legal_name": client.legal_name, "tax_id": client.tax_id, "convite_emailed": emailed},
+        after={
+            "legal_name": client.legal_name,
+            "tax_id": client.tax_id,
+            "correios_contract_saved": True,
+            "convite_emailed": emailed,
+        },
         origin="Agência",
         ip_address=client_ip(request),
     )

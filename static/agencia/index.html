@@ -116,7 +116,22 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
           <div class="field"><label>Contato</label><input id="cContactName"></div>
           <div class="field"><label>E-mail (login do cliente) *</label><input id="cContactEmail" type="email"></div>
         </div>
+        <div class="grid g2">
+          <div class="field"><label>Telefone Fixo</label><input id="cPhoneFixo" placeholder="(11) 2345-6789"></div>
+          <div class="field"><label>Telefone Celular</label><input id="cPhoneCelular" placeholder="(11) 92345-6789"></div>
+        </div>
         <p class="notice">Cadastro é feito só por e-mail — o cliente recebe um convite para definir a própria senha.</p>
+        <h3>Contrato dos Correios do cliente (CWS)</h3>
+        <p class="notice">Informe o contrato usado por este cliente. O código de acesso será armazenado criptografado. Não é o login Correios Atende da agência.</p>
+        <div class="grid g2">
+          <div class="field"><label>Usuário CWS *</label><input id="cCorreiosUser" required></div>
+          <div class="field"><label>Código de acesso CWS *</label><input id="cCorreiosAccess" type="password" required></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Cartão de postagem *</label><input id="cCorreiosCard" required></div>
+          <div class="field"><label>Número do contrato *</label><input id="cCorreiosContract" required></div>
+        </div>
+        <div class="field" style="max-width:160px"><label>Diretoria Regional (DR) *</label><input id="cCorreiosDr" type="number" min="1" value="74" required></div>
         <br><button id="saveClient" class="action">Cadastrar cliente</button>
       </div>
       <br>
@@ -283,16 +298,20 @@ window.deactivateClient = async (id) => {
 };
 
 liveMask($('cTax'), maskCpfCnpj);
+liveMask($('cPhoneFixo'), maskPhoneFixo);
+liveMask($('cPhoneCelular'), maskPhoneCelular);
 attachCepAutofill('cZip', { street: 'cStreet', district: 'cDistrict', city: 'cCity', state: 'cState' });
 
 const NEW_CLIENT_FIELD_IDS = [
   'cLegal', 'cTrade', 'cTax', 'cZip', 'cStreet', 'cNumber', 'cComplement', 'cDistrict',
-  'cCity', 'cState', 'cContactName', 'cContactEmail',
+  'cCity', 'cState', 'cContactName', 'cContactEmail', 'cPhoneFixo', 'cPhoneCelular',
+  'cCorreiosUser', 'cCorreiosAccess', 'cCorreiosCard', 'cCorreiosContract',
 ];
 
 function clearNewClientForm() {
   NEW_CLIENT_FIELD_IDS.forEach(id => { $(id).value = ''; });
   $('cPersonType').selectedIndex = 0;
+  $('cCorreiosDr').value = '74';
 }
 
 $('saveClient').onclick = async () => {
@@ -307,6 +326,15 @@ $('saveClient').onclick = async () => {
         address_complement: $('cComplement').value || null, address_district: $('cDistrict').value || null,
         city: $('cCity').value || null, state: $('cState').value || null,
         contact_name: $('cContactName').value || null, contact_email: $('cContactEmail').value,
+        contact_phone: onlyDigits($('cPhoneFixo').value) || null,
+        contact_phone_mobile: onlyDigits($('cPhoneCelular').value) || null,
+        correios_credential: {
+          correios_username: $('cCorreiosUser').value,
+          access_code: $('cCorreiosAccess').value,
+          postal_card: $('cCorreiosCard').value,
+          contract_number: $('cCorreiosContract').value,
+          dr: parseInt($('cCorreiosDr').value, 10),
+        },
       })
     });
     clearNewClientForm();

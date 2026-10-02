@@ -106,7 +106,7 @@ def create_client_admin(
             "legal_name": client.legal_name,
             "tax_id": client.tax_id,
             "licensee_id": licensee.id,
-            "correios_contract": payload.correios_credential.contract_number,
+            "correios_contract_saved": True,
             "convite_emailed": emailed,
         },
         origin="Admin",
