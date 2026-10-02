@@ -82,11 +82,13 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     </div>
     <nav>
       <button data-p="clientes">Clientes</button>
+      <button data-p="equipe" id="navEquipe" class="hidden">Usuários</button>
       <button id="logoutBtn" class="navlogout">Sair</button>
     </nav>
   </aside>
   <main>
     <h1 id="title">Clientes</h1>
+    <p class="notice" id="postingAgencyInfo"></p>
 
     <section id="clientes" class="page active">
       <div class="card">
@@ -142,6 +144,33 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
         </table>
       </div>
     </section>
+
+    <section id="equipe" class="page">
+      <div class="card">
+        <h3>Novo usuário</h3>
+        <p class="notice">Cadastro só por e-mail: a pessoa recebe um convite para definir a própria senha. Administrador cadastra Financeiro, Operador de Caixa, Expedição e SAC; só o Master cadastra Master e Administrador.</p>
+        <div class="grid g2">
+          <div class="field"><label>E-mail *</label><input id="eqEmail" type="email"></div>
+          <div class="field"><label>Nome completo</label><input id="eqName"></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Perfil</label>
+            <select id="eqRole">
+              <option>Master</option><option>Administrador</option><option>Financeiro</option>
+              <option selected>Operador de Caixa</option><option>Expedição</option><option>SAC</option>
+            </select>
+          </div>
+        </div>
+        <br><button class="action" id="eqSave">Cadastrar usuário</button>
+      </div>
+      <br>
+      <div class="card scroll">
+        <table>
+          <thead><tr><th>E-mail</th><th>Nome</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+          <tbody id="eqTable"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -168,6 +197,7 @@ function openp(p) {
   $(p).classList.add('active');
   $('title').textContent = document.querySelector(`button[data-p="${p}"]`).textContent;
   if (p === 'clientes') loadClients();
+  if (p === 'equipe') loadTeam();
 }
 
 $('logoutBtn').onclick = async () => {
@@ -211,8 +241,7 @@ async function doLogin() {
     });
     $('login').classList.add('hidden');
     $('app').classList.remove('hidden');
-    S.me = await api('/api/v1/auth/agencia/me');
-    await loadClients();
+    await afterLogin();
   } catch (e) { $('msg').textContent = e.message; }
 }
 $('loginForm').addEventListener('submit', (ev) => { ev.preventDefault(); doLogin(); });
@@ -238,7 +267,7 @@ async function doSupportLogin() {
     });
     const licensees = await api('/api/v1/auth/support/licensees');
     $('supportLicensee').innerHTML = licensees.map(l => `<option value="${l.id}">${esc(l.trade_name || l.legal_name)} (${esc(l.status)})</option>`).join('')
-      || '<option value="">Nenhum licenciado cadastrado ainda</option>';
+      || '<option value="">Nenhuma loja cadastrada ainda</option>';
     $('loginForm').classList.add('hidden');
     $('supportPicker').classList.remove('hidden');
   } catch (e) { $('msg').textContent = e.message; }
@@ -246,15 +275,14 @@ async function doSupportLogin() {
 
 $('supportEnter').onclick = async () => {
   const id = $('supportLicensee').value;
-  if (!id) { $('supportMsg').textContent = 'Escolha um licenciado.'; return; }
+  if (!id) { $('supportMsg').textContent = 'Escolha uma loja.'; return; }
   try {
     await api(`/api/v1/auth/support/enter/${id}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ portal: 'agencia' })
     });
     $('login').classList.add('hidden');
     $('app').classList.remove('hidden');
-    S.me = await api('/api/v1/auth/agencia/me');
-    await loadClients();
+    await afterLogin();
   } catch (e) { $('supportMsg').textContent = e.message; }
 };
 
@@ -341,6 +369,60 @@ $('saveClient').onclick = async () => {
     await loadClients();
     if (out.invite_emailed) alert('Cliente cadastrado. Convite enviado por e-mail.');
     else alert('Cliente cadastrado. Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.invite_link);
+  } catch (e) { alert(e.message); }
+};
+
+// --------------------------- Pós-login / agência postadora / equipe ---------------------------
+const ROLE_RANK = { 'Operador de Caixa': 1, 'Expedição': 1, 'SAC': 1, Financeiro: 2, Administrador: 3, Master: 4 };
+const canManageTeam = () => (ROLE_RANK[S.me?.role] || 0) >= ROLE_RANK.Administrador;
+const canManageRole = (role) => S.me?.role === 'Master' || (ROLE_RANK[role] || 99) < (ROLE_RANK[S.me?.role] || 0);
+
+async function afterLogin() {
+  S.me = await api('/api/v1/auth/agencia/me');
+  $('navEquipe').classList.toggle('hidden', !canManageTeam());
+  let pa = null;
+  try { pa = await api('/api/v1/agencia/posting-agency'); } catch (e) {}
+  $('postingAgencyInfo').textContent = pa
+    ? `Agência postadora: ${pa.trade_name || pa.legal_name}${pa.mcu ? ' · MCU ' + pa.mcu : ''}${pa.city ? ' · ' + pa.city + (pa.state ? '/' + pa.state : '') : ''}`
+    : 'Agência postadora: ainda não vinculada (fale com a equipe BigPost).';
+  openp('clientes');
+}
+
+async function loadTeam() {
+  $('eqRole').querySelectorAll('option').forEach(o => o.disabled = !canManageRole(o.value));
+  const rows = await api('/api/v1/agencia/users');
+  $('eqTable').innerHTML = rows.map(u => `<tr>
+    <td>${esc(u.username)}</td><td>${esc(u.full_name || '')}</td><td>${esc(u.role)}</td>
+    <td>${u.active ? (u.locked ? 'Ativo (bloqueado)' : 'Ativo') : 'Inativo'}</td>
+    <td>${u.active && canManageRole(u.role) && u.id !== S.me.id ? `
+      ${u.locked ? `<button class="action secondary" onclick="teamAction(${u.id}, 'unlock')">Desbloquear</button>` : ''}
+      <button class="action secondary" onclick="teamAction(${u.id}, 'reset-password')">Zerar senha</button>
+      <button class="action secondary" onclick="teamAction(${u.id}, 'deactivate')">Desativar</button>` : ''}</td>
+  </tr>`).join('') || '<tr><td colspan="5" class="notice">Nenhum usuário.</td></tr>';
+}
+
+$('eqSave').onclick = async () => {
+  try {
+    const out = await api('/api/v1/agencia/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('eqEmail').value.trim(), full_name: $('eqName').value.trim() || null, role: $('eqRole').value }),
+    });
+    $('eqEmail').value = ''; $('eqName').value = '';
+    await loadTeam();
+    if (out.invite_emailed) alert('Usuário cadastrado. Convite enviado por e-mail.');
+    else alert('Usuário cadastrado. Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.invite_link);
+  } catch (e) { alert(e.message); }
+};
+
+window.teamAction = async (id, action) => {
+  if (action === 'deactivate' && !confirm('Desativar este usuário?')) return;
+  try {
+    const out = await api(`/api/v1/agencia/users/${id}/${action}`, { method: 'POST' });
+    if (action === 'reset-password') {
+      if (out.emailed) alert('Link de redefinição enviado por e-mail.');
+      else alert('Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.link);
+    }
+    await loadTeam();
   } catch (e) { alert(e.message); }
 };
 </script>

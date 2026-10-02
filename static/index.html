@@ -88,7 +88,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     </div>
     <nav>
       <button data-p="dash">Dashboard</button>
-      <button data-p="clientes" data-minrole="Supervisor">Credenciais</button>
+      <button data-p="agencias" data-minrole="Supervisor">Agências Postadoras</button>
       <button class="navgroup" data-minrole="Supervisor" onclick="toggleNavGroup('cliente')">Cliente <span class="car" id="clienteCar">▾</span></button>
       <div class="navsub hidden" id="clienteSub" data-minrole="Supervisor">
         <button class="subbtn" data-p="cli_cadastro">Cadastrar Cliente</button>
@@ -109,29 +109,74 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     <section id="dash" class="page active">
       <div class="card privacy">
         <b>Privacidade / LGPD</b>
-        <p>Este painel administra a operação das agências já licenciadas (usuários, credenciais Correios e cobrança) — cadastro de licenciado e emissão de licença são feitos no Painel Master, sistema separado. Não recebe etiquetas, remetente/destinatário, notas fiscais ou qualquer dado operacional de postagem dos licenciados.</p>
+        <p>Este painel administra a operação do BigPost (agências postadoras, clientes e cobrança). As lojas e as licenças são cadastradas no Painel Master, sistema separado. Não recebe etiquetas, remetente/destinatário, notas fiscais ou qualquer dado operacional de postagem das lojas.</p>
       </div>
       <br>
       <div id="metrics" class="metrics"></div>
     </section>
 
-    <section id="clientes" class="page">
+    <section id="agencias" class="page">
+      <div class="card" id="agFormCard">
+        <h3 id="agFormTitle">Cadastrar agência postadora</h3>
+        <p class="notice">A agência postadora é a AGF por onde as lojas postam. O MCU e o login do Correios Atende ficam com ela; a senha é guardada criptografada e nunca é exibida de volta.</p>
+        <input type="hidden" id="agId">
+        <div class="grid">
+          <div class="field"><label>CNPJ *</label><input id="agTax"></div>
+          <div class="field"><label>Razão Social *</label><input id="agLegal"></div>
+          <div class="field"><label>Nome Fantasia</label><input id="agTrade"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>CEP</label><input id="agZip"></div>
+          <div class="field"><label>Logradouro</label><input id="agStreet"></div>
+          <div class="field"><label>Número</label><input id="agNumber"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Complemento</label><input id="agComplement"></div>
+          <div class="field"><label>Bairro</label><input id="agDistrict"></div>
+          <div class="field"><label>Cidade / UF</label><div style="display:flex;gap:6px"><input id="agCity" style="flex:1"><input id="agState" maxlength="2" style="width:56px"></div></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Contato</label><input id="agContactName"></div>
+          <div class="field"><label>E-mail</label><input id="agContactEmail" type="email"></div>
+          <div class="field"><label>Telefone</label><input id="agContactPhone"></div>
+        </div>
+        <h3>Correios Atende</h3>
+        <div class="grid">
+          <div class="field"><label>MCU (8 dígitos)</label><input id="agMcu" maxlength="8" inputmode="numeric"></div>
+          <div class="field"><label>Usuário Correios Atende</label><input id="agUser" autocomplete="off"></div>
+          <div class="field"><label>Senha Correios Atende</label><input id="agPass" type="password" autocomplete="new-password"></div>
+        </div>
+        <p class="notice" id="agPassHint"></p>
+        <div class="field"><label><input type="checkbox" id="agActive" checked> Ativa</label></div>
+        <br>
+        <button class="action" id="agSave">Salvar agência</button>
+        <button class="action secondary" id="agNew">Limpar / nova</button>
+      </div>
+      <br>
       <div class="card scroll">
-        <h3>Licenciados</h3>
-        <p class="notice">Cadastro de novos licenciados e emissão de licença são feitos no Painel Master. Aqui você gerencia a operação de quem já está licenciado: usuários da agência e credenciais Correios.</p>
+        <h3>Agências cadastradas</h3>
         <table>
-          <thead><tr><th>Empresa</th><th>CNPJ/CPF</th><th>Cidade/UF</th><th>Contato</th><th>Status</th><th>Ação</th></tr></thead>
-          <tbody id="licensees"></tbody>
+          <thead><tr><th>Agência</th><th>CNPJ</th><th>MCU</th><th>Correios Atende</th><th>Lojas atendidas</th><th>Status</th><th></th></tr></thead>
+          <tbody id="agTable"></tbody>
         </table>
+      </div>
+      <br>
+      <div class="card hidden" id="agStoresCard">
+        <h3 id="agStoresTitle">Lojas atendidas</h3>
+        <p class="notice">Cada loja posta por uma única agência. Marcar aqui uma loja que já está em outra agência transfere a loja para esta.</p>
+        <div id="agStoresList"></div>
+        <br>
+        <button class="action" id="agStoresSave">Salvar lojas</button>
+        <button class="action secondary" onclick="$('agStoresCard').classList.add('hidden')">Fechar</button>
       </div>
     </section>
 
     <section id="cli_cadastro" class="page">
       <div class="card">
         <h3>Cadastrar Cliente</h3>
-        <p class="notice">Cadastro é feito só por e-mail — o cliente recebe um convite para definir a própria senha. O cadastro normal continua sendo feito pelo próprio portal da Agência; esta tela é um atalho para a equipe BigPost cadastrar direto, escolhendo o licenciado.</p>
+        <p class="notice">Cadastro é feito só por e-mail — o cliente recebe um convite para definir a própria senha. O cadastro normal continua sendo feito pelo próprio portal da Agência; esta tela é um atalho para a equipe BigPost cadastrar direto, escolhendo a loja.</p>
         <div class="grid g2">
-          <div class="field"><label>Licenciado *</label><select id="cliCadLicensee"></select></div>
+          <div class="field"><label>Loja *</label><select id="cliCadLicensee"></select></div>
           <div class="field"><label>Tipo de pessoa</label>
             <select id="cliCadPersonType"><option value="PJ">Pessoa Jurídica</option><option value="PF">Pessoa Física</option></select>
           </div>
@@ -177,13 +222,13 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
     <section id="cli_relatorios" class="page">
       <div class="card scroll">
         <h3>Cliente — Relatórios</h3>
-        <p class="notice">Consulta dos clientes cadastrados nas agências licenciadas (o cadastro normal é feito pelo portal da Agência; a aba "Cadastrar Cliente" ao lado é um atalho equivalente aqui no Admin).</p>
+        <p class="notice">Consulta dos clientes cadastrados nas lojas (o cadastro normal é feito pelo portal da Agência; a aba "Cadastrar Cliente" ao lado é um atalho equivalente aqui no Admin).</p>
         <div class="grid g2">
-          <div class="field"><label>Licenciado</label><select id="cliRelLicensee"><option value="">Todos</option></select></div>
+          <div class="field"><label>Loja</label><select id="cliRelLicensee"><option value="">Todas</option></select></div>
           <div class="field"><label>Buscar</label><input id="cliRelSearch" placeholder="Nome, e-mail ou CNPJ/CPF"></div>
         </div>
         <table>
-          <thead><tr><th>Cliente</th><th>CNPJ/CPF</th><th>E-mail</th><th>Licenciado</th><th>Status</th></tr></thead>
+          <thead><tr><th>Cliente</th><th>CNPJ/CPF</th><th>E-mail</th><th>Loja</th><th>Status</th></tr></thead>
           <tbody id="cliRelBody"></tbody>
         </table>
       </div>
@@ -200,7 +245,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
       <div class="card">
         <h3>Emitir Cobrança</h3>
         <div class="grid">
-          <div class="field"><label>Licenciado</label><select id="chgL"></select></div>
+          <div class="field"><label>Loja</label><select id="chgL"></select></div>
           <div class="field"><label>Referência</label><input id="ref" type="month"></div>
           <div class="field"><label>Vencimento</label><input id="due" type="date"></div>
           <div class="field"><label>Valor</label><input id="chgAmount" type="number" step=".01"></div>
@@ -208,7 +253,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
         <br><button id="emitCharge" class="action">Emitir cobrança</button>
       </div>
       <div class="card scroll">
-        <table><thead><tr><th>Licenciado</th><th>Referência</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="charges"></tbody></table>
+        <table><thead><tr><th>Loja</th><th>Referência</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="charges"></tbody></table>
       </div>
     </section>
 
@@ -228,7 +273,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
       <div id="bbCobr" class="card bbpanel">
         <h3>Gerar cobranças em massa</h3>
         <div class="grid g2"><div class="field"><label>Competência</label><input id="massRef" type="month"></div><div class="field"><label>Vencimento</label><input id="massDue" type="date"></div></div>
-        <br><button id="massCharges" class="action">Gerar para todos os licenciados ativos</button>
+        <br><button id="massCharges" class="action">Gerar para todas as lojas ativas</button>
       </div>
       <div id="bbRem" class="card bbpanel hidden">
         <h3>Remessa</h3>
@@ -305,7 +350,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
       </select>
     </div>
     <div class="field" id="upLicenseeField">
-      <label>Licenciado</label><select id="upLicensee"></select>
+      <label>Loja</label><select id="upLicensee"></select>
     </div>
     <div class="field"><label>Usuário</label><select id="upUser"></select></div>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -330,7 +375,7 @@ async function api(url, opts) {
 }
 
 async function loadAll() {
-  const [state, licensees, charges, bankEntries, bankConfig, remittances, params, clients] = await Promise.all([
+  const [state, licensees, charges, bankEntries, bankConfig, remittances, params, clients, agencies, stores] = await Promise.all([
     api('/api/v1/state'),
     api('/api/v1/licensees'),
     api('/api/v1/charges'),
@@ -339,8 +384,10 @@ async function loadAll() {
     api('/api/v1/bank/remittances'),
     api('/api/v1/params').catch(() => []),
     api('/api/v1/clients').catch(() => []),
+    api('/api/v1/posting-agencies').catch(() => []),
+    api('/api/v1/posting-agencies/stores').catch(() => []),
   ]);
-  S = { state, licensees, charges, bankEntries, bankConfig, remittances, params, clients };
+  S = { state, licensees, charges, bankEntries, bankConfig, remittances, params, clients, agencies, stores };
   let usersTable = [];
   try { usersTable = await api('/api/v1/users'); } catch (e) {}
   S.usersTable = usersTable;
@@ -354,33 +401,17 @@ function render() {
 
   const m = S.state.metrics;
   $('metrics').innerHTML = `
-    <div class="metric">Licenciados<b>${m.licensees}</b></div>
-    <div class="metric">Ativos<b>${m.active}</b></div>
-    <div class="metric">Inadimplentes / Bloqueados<b>${m.late_or_blocked}</b></div>
-    <div class="metric">Usuários ativos reportados<b>${m.reported_active_users}</b></div>`;
+    <div class="metric">Agências postadoras<b>${(S.agencies || []).length}</b></div>
+    <div class="metric">Lojas sem agência postadora<b>${(S.stores || []).filter(x => !x.posting_agency_id).length}</b></div>
+    <div class="metric">Clientes<b>${(S.clients || []).length}</b></div>`;
 
   const licOpts = S.licensees.map(l => `<option value="${l.id}">${esc(l.trade_name || l.legal_name)}</option>`).join('');
   $('chgL').innerHTML = licOpts;
-  $('cliRelLicensee').innerHTML = '<option value="">Todos</option>' + licOpts;
+  $('cliRelLicensee').innerHTML = '<option value="">Todas</option>' + licOpts;
   $('cliCadLicensee').innerHTML = licOpts;
   renderCliRelatorios();
 
-  $('licensees').innerHTML = S.licensees.map(l => `<tr>
-    <td>${esc(l.trade_name || l.legal_name)}</td>
-    <td>${esc(maskCpfCnpj(l.tax_id))}</td>
-    <td>${esc(l.city || '')}${l.state ? '/' + esc(l.state) : ''}</td>
-    <td>${esc(l.contact_name || '')}</td>
-    <td>${esc(l.status)}</td>
-    <td>
-      <select onchange="setStatus(${l.id}, this.value)">
-        ${['Ativo','Inadimplente','Bloqueado','Expirado'].map(s => `<option ${l.status===s?'selected':''}>${s}</option>`).join('')}
-      </select>
-      <button class="action secondary" onclick="toggleLicenseeUsers(${l.id})">Usuários &amp; Correios</button>
-      ${ur >= rank.Master ? `<button class="action secondary" onclick="toggleLicenseeEdit(${l.id})">Editar dados</button>` : ''}
-    </td>
-  </tr>
-  <tr id="licdetailrow_${l.id}" class="hidden"><td colspan="6"><div class="detailwrap" id="licdetail_${l.id}"></div></td></tr>
-  <tr id="liceditrow_${l.id}" class="hidden"><td colspan="6"><div class="detailwrap" id="licedit_${l.id}"></div></td></tr>`).join('');
+  renderAgencies();
 
   $('charges').innerHTML = S.charges.map(x => {
     const l = S.licensees.find(li => li.id === x.licensee_id) || {};
@@ -554,247 +585,97 @@ async function showForgotPassword() {
   alert('Se esse e-mail tiver uma conta, enviamos as instruções de redefinição de senha para ele.');
 }
 
-// --------------------------- Licenciados ---------------------------
-async function setStatus(id, status) {
-  try { await api(`/api/v1/licensees/${id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); await loadAll(); }
-  catch (e) { alert(e.message); }
+// --------------------------- Agências postadoras ---------------------------
+const AG_FIELDS = {
+  agTax: 'tax_id', agLegal: 'legal_name', agTrade: 'trade_name', agZip: 'zip_code', agStreet: 'address_street',
+  agNumber: 'address_number', agComplement: 'address_complement', agDistrict: 'address_district', agCity: 'city',
+  agState: 'state', agContactName: 'contact_name', agContactEmail: 'contact_email', agContactPhone: 'contact_phone',
+  agMcu: 'mcu', agUser: 'correios_username',
+};
+const AG_DIGITS = new Set(['tax_id', 'zip_code', 'contact_phone', 'mcu']);
+const storeName = l => l.trade_name || l.legal_name;
+
+function renderAgencies() {
+  const isMaster = S.state.user?.role === 'Master';
+  $('agFormCard').classList.toggle('hidden', !isMaster);
+  $('agTable').innerHTML = (S.agencies || []).map(a => `<tr>
+    <td>${esc(a.trade_name || a.legal_name)}</td>
+    <td>${esc(maskCpfCnpj(a.tax_id))}</td>
+    <td>${esc(a.mcu || '—')}</td>
+    <td>${a.correios_username ? esc(a.correios_username) + (a.has_correios_password ? '' : ' <span class="notice">(sem senha)</span>') : '<span class="notice">não cadastrado</span>'}</td>
+    <td>${a.stores.length ? a.stores.map(x => esc(storeName(x))).join(', ') : '<span class="notice">nenhuma</span>'}</td>
+    <td>${a.active ? 'Ativa' : 'Inativa'}</td>
+    <td>${isMaster ? `<button class="action secondary" onclick="editAgency(${a.id})">Editar</button>
+      <button class="action secondary" onclick="openAgencyStores(${a.id})">Lojas</button>` : ''}</td>
+  </tr>`).join('') || '<tr><td colspan="7" class="notice">Nenhuma agência postadora cadastrada.</td></tr>';
 }
 
-async function toggleLicenseeUsers(id) {
-  const row = $('licdetailrow_' + id);
-  const wasHidden = row.classList.contains('hidden');
-  document.querySelectorAll('[id^="licdetailrow_"]').forEach(r => r.classList.add('hidden'));
-  document.querySelectorAll('[id^="liceditrow_"]').forEach(r => r.classList.add('hidden'));
-  if (wasHidden) {
-    row.classList.remove('hidden');
-    await renderLicenseeUsersPanel(id);
-  }
+function clearAgencyForm() {
+  $('agId').value = '';
+  Object.keys(AG_FIELDS).forEach(id => $(id).value = '');
+  $('agPass').value = '';
+  $('agActive').checked = true;
+  $('agTax').disabled = false;
+  $('agFormTitle').textContent = 'Cadastrar agência postadora';
+  $('agPassHint').textContent = '';
 }
 
-async function toggleLicenseeEdit(id) {
-  const row = $('liceditrow_' + id);
-  const wasHidden = row.classList.contains('hidden');
-  document.querySelectorAll('[id^="liceditrow_"]').forEach(r => r.classList.add('hidden'));
-  document.querySelectorAll('[id^="licdetailrow_"]').forEach(r => r.classList.add('hidden'));
-  if (wasHidden) {
-    row.classList.remove('hidden');
-    renderLicenseeEditPanel(id);
-  }
-}
+window.editAgency = (id) => {
+  const a = S.agencies.find(x => x.id === id);
+  if (!a) return;
+  clearAgencyForm();
+  $('agId').value = a.id;
+  Object.entries(AG_FIELDS).forEach(([el, f]) => $(el).value = a[f] || '');
+  $('agTax').value = maskCpfCnpj(a.tax_id);
+  $('agActive').checked = a.active;
+  $('agFormTitle').textContent = 'Editar agência postadora — ' + (a.trade_name || a.legal_name);
+  $('agPassHint').textContent = a.has_correios_password ? 'Senha já cadastrada. Deixe em branco para manter a atual.' : 'Nenhuma senha cadastrada ainda.';
+  openp('agencias');
+  $('agFormCard').scrollIntoView({ behavior: 'smooth' });
+};
 
-function renderLicenseeEditPanel(licenseeId) {
-  const el = $('licedit_' + licenseeId);
-  const l = S.licensees.find(x => x.id === licenseeId);
-  if (!l) { el.innerHTML = '<p class="notice">Licenciado não encontrado.</p>'; return; }
-  el.innerHTML = `
-    <div class="card">
-      <h3>Editar dados do licenciado</h3>
-      <p class="notice">Edição local — o cadastro veio do Painel Master e uma próxima sincronização de lá pode sobrescrever o que for alterado aqui. CNPJ/CPF não é editável (é a chave usada pelo Painel Master para reconhecer este licenciado).</p>
-      <div class="grid g2">
-        <div class="field"><label>CNPJ/CPF</label><input value="${esc(maskCpfCnpj(l.tax_id))}" disabled></div>
-        <div class="field"><label>Razão Social</label><input id="lcLegal_${licenseeId}" value="${esc(l.legal_name || '')}"></div>
-      </div>
-      <div class="grid g2">
-        <div class="field"><label>Nome Fantasia</label><input id="lcTrade_${licenseeId}" value="${esc(l.trade_name || '')}"></div>
-        <div class="field"><label>Inscrição Estadual</label><input id="lcStateReg_${licenseeId}" value="${esc(l.state_registration || '')}"></div>
-      </div>
-      <div class="section-title">Endereço</div>
-      <div class="grid g2">
-        <div class="field"><label>CEP</label><input id="lcZip_${licenseeId}" maxlength="9" placeholder="00000-000" value="${esc(maskCEP(l.zip_code || ''))}"></div>
-        <div class="field"><label>Rua/Av</label><input id="lcStreet_${licenseeId}" value="${esc(l.address_street || '')}"></div>
-      </div>
-      <div class="grid">
-        <div class="field"><label>Número</label><input id="lcNumber_${licenseeId}" value="${esc(l.address_number || '')}"></div>
-        <div class="field"><label>Complemento (opcional)</label><input id="lcComplement_${licenseeId}" value="${esc(l.address_complement || '')}"></div>
-        <div class="field"><label>Bairro</label><input id="lcDistrict_${licenseeId}" value="${esc(l.address_district || '')}"></div>
-      </div>
-      <div class="grid g2">
-        <div class="field"><label>Cidade</label><input id="lcCity_${licenseeId}" value="${esc(l.city || '')}"></div>
-        <div class="field" style="max-width:120px"><label>UF</label><input id="lcState_${licenseeId}" maxlength="2" value="${esc(l.state || '')}"></div>
-      </div>
-      <div class="section-title">Contato</div>
-      <div class="grid g2">
-        <div class="field"><label>Nome do contato</label><input id="lcContactName_${licenseeId}" value="${esc(l.contact_name || '')}"></div>
-        <div class="field"><label>Cargo</label><input id="lcContactRole_${licenseeId}" value="${esc(l.contact_role || '')}"></div>
-      </div>
-      <div class="grid g2">
-        <div class="field"><label>E-mail de contato</label><input id="lcContactEmail_${licenseeId}" value="${esc(l.contact_email || '')}"></div>
-        <div class="field"><label>Telefone de contato</label><input id="lcContactPhone_${licenseeId}" value="${esc(maskPhoneGeneric(l.contact_phone || ''))}"></div>
-      </div>
-      <div class="grid g2">
-        <div class="field"><label>E-mail de cobrança</label><input id="lcBillingEmail_${licenseeId}" value="${esc(l.billing_email || '')}"></div>
-        <div class="field"><label>Telefone de cobrança</label><input id="lcBillingPhone_${licenseeId}" value="${esc(maskPhoneGeneric(l.billing_phone || ''))}"></div>
-      </div>
-      <div class="field"><label>Website</label><input id="lcWebsite_${licenseeId}" value="${esc(l.website || '')}"></div>
-      <div class="section-title">Observações (visível somente para Master)</div>
-      <div class="field"><textarea id="lcNotes_${licenseeId}" rows="3">${esc(l.notes || '')}</textarea></div>
-      <br>
-      <button class="action" onclick="saveLicenseeEdit(${licenseeId})">Salvar dados do licenciado</button>
-      <button class="action secondary" onclick="toggleLicenseeEdit(${licenseeId})">Cancelar</button>
-    </div>`;
-  attachCepAutofill('lcZip_' + licenseeId, {
-    street: 'lcStreet_' + licenseeId, district: 'lcDistrict_' + licenseeId,
-    city: 'lcCity_' + licenseeId, state: 'lcState_' + licenseeId,
+$('agNew').onclick = clearAgencyForm;
+$('agSave').onclick = async () => {
+  const id = $('agId').value;
+  const body = { active: $('agActive').checked, correios_password: $('agPass').value || null };
+  Object.entries(AG_FIELDS).forEach(([el, f]) => {
+    const v = $(el).value.trim();
+    body[f] = AG_DIGITS.has(f) ? (onlyDigits(v) || null) : (v || null);
   });
-  liveMask($('lcContactPhone_' + licenseeId), maskPhoneGeneric);
-  liveMask($('lcBillingPhone_' + licenseeId), maskPhoneGeneric);
-}
-
-async function saveLicenseeEdit(licenseeId) {
-  const current = S.licensees.find(x => x.id === licenseeId) || {};
-  const payload = {
-    ...current,
-    legal_name: $('lcLegal_' + licenseeId).value,
-    trade_name: $('lcTrade_' + licenseeId).value || null,
-    state_registration: $('lcStateReg_' + licenseeId).value || null,
-    zip_code: onlyDigits($('lcZip_' + licenseeId).value) || null,
-    address_street: $('lcStreet_' + licenseeId).value || null,
-    address_number: $('lcNumber_' + licenseeId).value || null,
-    address_complement: $('lcComplement_' + licenseeId).value || null,
-    address_district: $('lcDistrict_' + licenseeId).value || null,
-    city: $('lcCity_' + licenseeId).value || null,
-    state: $('lcState_' + licenseeId).value || null,
-    contact_name: $('lcContactName_' + licenseeId).value || null,
-    contact_role: $('lcContactRole_' + licenseeId).value || null,
-    contact_email: $('lcContactEmail_' + licenseeId).value || null,
-    contact_phone: onlyDigits($('lcContactPhone_' + licenseeId).value) || null,
-    billing_email: $('lcBillingEmail_' + licenseeId).value || null,
-    billing_phone: onlyDigits($('lcBillingPhone_' + licenseeId).value) || null,
-    website: $('lcWebsite_' + licenseeId).value || null,
-    notes: $('lcNotes_' + licenseeId).value || null,
-  };
-  delete payload.id; delete payload.status; delete payload.reported_active_users;
-  delete payload.created_at; delete payload.updated_at; delete payload.created_by;
+  if (body.state) body.state = body.state.toUpperCase();
   try {
-    await api(`/api/v1/licensees/${licenseeId}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    await api('/api/v1/posting-agencies' + (id ? '/' + id : ''), {
+      method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
+    clearAgencyForm();
     await loadAll();
-    alert('Dados do licenciado atualizados.');
+    alert('Agência postadora salva.');
   } catch (e) { alert(e.message); }
-}
+};
 
-async function renderLicenseeUsersPanel(licenseeId) {
-  const el = $('licdetail_' + licenseeId);
-  el.innerHTML = '<p class="notice">Carregando...</p>';
-  let users = [];
-  try { users = await api(`/api/v1/licensees/${licenseeId}/users`); } catch (e) { el.innerHTML = `<p class="notice">${esc(e.message)}</p>`; return; }
-  let agfCred = null, clienteCred = null;
-  try { agfCred = await api(`/api/v1/licensees/${licenseeId}/correios-credential`); } catch (e) {}
-  try { clienteCred = await api(`/api/v1/licensees/${licenseeId}/client-correios-credential`); } catch (e) {}
-
-  el.innerHTML = `
-    <div class="card">
-      <h3>Usuários da agência</h3>
-      <p class="notice">Cadastro é feito só por e-mail — a pessoa recebe um convite para definir a própria senha.</p>
-      <div class="grid">
-        <div class="field"><label>E-mail</label><input id="agUserUsername_${licenseeId}" type="email"></div>
-        <div class="field"><label>Nome completo</label><input id="agUserFullName_${licenseeId}"></div>
-      </div>
-      <div class="field"><label>Perfil</label>
-        <select id="agUserRole_${licenseeId}">
-          <option>Master</option><option>Administrador</option><option>Financeiro</option>
-          <option selected>Operador de Caixa</option><option>Expedição</option><option>SAC</option>
-        </select>
-      </div>
-      <br><button class="action" onclick="saveAgencyUser(${licenseeId})">Cadastrar usuário</button>
-    </div>
-    <div class="card scroll">
-      <table><thead><tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
-      <tbody>${users.map(u => `<tr>
-        <td>${esc(u.username)}</td><td>${esc(u.full_name || '')}</td><td>${esc(u.role)}</td>
-        <td>${u.active ? (u.locked ? 'Ativo (bloqueado)' : 'Ativo') : 'Inativo'}</td>
-        <td>${u.active ? `<button class="action secondary" onclick="deactivateAgencyUser(${licenseeId}, ${u.id})">Desativar</button>` : ''}</td>
-      </tr>`).join('')}</tbody></table>
-    </div>
-    <div class="card">
-      <h3>Credenciais AGF — Correios Atende</h3>
-      <p class="notice">MCU + login do site Correios Atende, usados pelos módulos BigPost Agência/Operação. A senha fica criptografada — nunca é exibida de volta aqui.</p>
-      <p class="notice">${agfCred ? `Cadastrada: MCU ${esc(agfCred.mcu)}, usuário ${esc(agfCred.correios_username)}${agfCred.last_validated_at ? ', última validação em ' + formatDateTimeBR(agfCred.last_validated_at) : ' (ainda não validada)'}.` : 'Nenhuma credencial cadastrada ainda.'}</p>
-      <div class="grid g2">
-        <div class="field"><label>MCU (8 dígitos)</label><input id="agfMcu_${licenseeId}" maxlength="8" pattern="[0-9]{8}" placeholder="00000000" value="${esc(agfCred?.mcu || '')}"></div>
-        <div class="field"><label>Usuário Correios Atende</label><input id="agfUser_${licenseeId}" value="${esc(agfCred?.correios_username || '')}"></div>
-      </div>
-      <div class="grid g2">
-        <div class="field"><label>Senha</label><input id="agfPass_${licenseeId}" type="password"></div>
-        <div class="field"><label>Token de API (se houver)</label><input id="agfToken_${licenseeId}" type="password"></div>
-      </div>
-      <br><button class="action secondary" onclick="saveAgfCred(${licenseeId})">Salvar credencial Correios Atende</button>
-    </div>
-    <div class="card">
-      <h3>Credenciais BigPost Cliente — Correios CWS (contrato)</h3>
-      <p class="notice">Usuário, código de acesso, cartão de postagem, contrato e Diretoria Regional (DR) do CWS (Correios Web Services) — usados pelo módulo BigPost Cliente para autenticar e postar de verdade. Diferente da credencial Correios Atende acima.</p>
-      <p class="notice">${clienteCred ? `Cadastrada: usuário ${esc(clienteCred.correios_username)}, cartão ${esc(clienteCred.postal_card)}, contrato ${esc(clienteCred.contract_number)}, DR ${clienteCred.dr ?? '(não informada)'}${clienteCred.last_validated_at ? ', última validação em ' + formatDateTimeBR(clienteCred.last_validated_at) : ' (ainda não validada)'}.` : 'Nenhuma credencial cadastrada ainda.'}</p>
-      <div class="grid g2">
-        <div class="field"><label>Usuário CWS</label><input id="clienteUser_${licenseeId}" value="${esc(clienteCred?.correios_username || '')}"></div>
-        <div class="field"><label>Código de acesso (CWS)</label><input id="clienteToken_${licenseeId}" type="password" placeholder="${clienteCred ? '••••••••' : ''}"></div>
-      </div>
-      <div class="grid g2">
-        <div class="field"><label>Cartão de postagem</label><input id="clienteCard_${licenseeId}" value="${esc(clienteCred?.postal_card || '')}"></div>
-        <div class="field"><label>Número do contrato</label><input id="clienteContract_${licenseeId}" value="${esc(clienteCred?.contract_number || '')}"></div>
-      </div>
-      <div class="grid g2">
-        <div class="field"><label>Diretoria Regional (DR)</label><input id="clienteDr_${licenseeId}" type="number" min="0" placeholder="ex.: 74" value="${clienteCred?.dr ?? 74}"></div>
-      </div>
-      <br><button class="action secondary" onclick="saveClienteCred(${licenseeId})">Salvar credencial BigPost Cliente</button>
-    </div>`;
-}
-
-async function saveAgfCred(licenseeId) {
+let agStoresId = null;
+window.openAgencyStores = (id) => {
+  const a = S.agencies.find(x => x.id === id);
+  agStoresId = id;
+  $('agStoresTitle').textContent = 'Lojas atendidas — ' + (a.trade_name || a.legal_name);
+  const others = Object.fromEntries((S.agencies || []).map(x => [x.id, x.trade_name || x.legal_name]));
+  $('agStoresList').innerHTML = (S.stores || []).map(l => `<div class="field"><label>
+    <input type="checkbox" value="${l.id}" ${l.posting_agency_id === id ? 'checked' : ''}>
+    ${esc(storeName(l))}${l.posting_agency_id && l.posting_agency_id !== id ? ` <span class="notice">(hoje em ${esc(others[l.posting_agency_id] || '?')})</span>` : ''}
+  </label></div>`).join('') || '<p class="notice">Nenhuma loja cadastrada ainda (as lojas vêm do Painel Master).</p>';
+  $('agStoresCard').classList.remove('hidden');
+  $('agStoresCard').scrollIntoView({ behavior: 'smooth' });
+};
+$('agStoresSave').onclick = async () => {
+  const ids = [...$('agStoresList').querySelectorAll('input:checked')].map(x => +x.value);
   try {
-    await api(`/api/v1/licensees/${licenseeId}/correios-credential`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mcu: onlyDigits($('agfMcu_' + licenseeId).value),
-        correios_username: $('agfUser_' + licenseeId).value,
-        password: $('agfPass_' + licenseeId).value,
-        token: $('agfToken_' + licenseeId).value || null,
-      }),
+    await api(`/api/v1/posting-agencies/${agStoresId}/stores`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ licensee_ids: ids }),
     });
-    await renderLicenseeUsersPanel(licenseeId);
-    alert('Credencial Correios Atende salva.');
+    $('agStoresCard').classList.add('hidden');
+    await loadAll();
   } catch (e) { alert(e.message); }
-}
-
-async function saveClienteCred(licenseeId) {
-  const drRaw = $('clienteDr_' + licenseeId).value;
-  try {
-    await api(`/api/v1/licensees/${licenseeId}/client-correios-credential`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        correios_username: $('clienteUser_' + licenseeId).value,
-        token: $('clienteToken_' + licenseeId).value || null,
-        postal_card: $('clienteCard_' + licenseeId).value,
-        contract_number: $('clienteContract_' + licenseeId).value,
-        dr: drRaw === '' ? null : parseInt(drRaw, 10),
-      }),
-    });
-    await renderLicenseeUsersPanel(licenseeId);
-    alert('Credencial BigPost Cliente salva.');
-  } catch (e) { alert(e.message); }
-}
-
-async function saveAgencyUser(licenseeId) {
-  try {
-    const out = await api(`/api/v1/licensees/${licenseeId}/users`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: $('agUserUsername_' + licenseeId).value,
-        full_name: $('agUserFullName_' + licenseeId).value || null,
-        role: $('agUserRole_' + licenseeId).value,
-      }),
-    });
-    await renderLicenseeUsersPanel(licenseeId);
-    if (out.invite_emailed) alert('Usuário cadastrado. Convite enviado por e-mail.');
-    else alert('Usuário cadastrado. Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.invite_link);
-  } catch (e) { alert(e.message); }
-}
-
-async function deactivateAgencyUser(licenseeId, userId) {
-  if (!confirm('Desativar este usuário da agência?')) return;
-  try { await api(`/api/v1/licensees/${licenseeId}/users/${userId}/deactivate`, { method: 'POST' }); await renderLicenseeUsersPanel(licenseeId); }
-  catch (e) { alert(e.message); }
-}
+};
 
 // --------------------------- Cobranças / Banco ---------------------------
 $('emitCharge').onclick = async () => {

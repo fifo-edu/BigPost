@@ -591,3 +591,80 @@ class ShipmentEventOut(BaseModel):
     description: str | None
     occurred_at: datetime
     created_by: str | None
+
+
+# --------------------------- Agências postadoras (AGF) ---------------------------
+class PostingAgencyUpsert(BaseModel):
+    """Cadastro da agência postadora. `correios_password` vazio na edição
+    mantém a senha já salva (o formulário não reexibe o valor atual)."""
+
+    legal_name: str = Field(min_length=1)
+    trade_name: str | None = None
+    tax_id: str = Field(pattern=r"^[0-9]{14}$")
+    zip_code: str | None = None
+    address_street: str | None = None
+    address_number: str | None = None
+    address_complement: str | None = None
+    address_district: str | None = None
+    city: str | None = None
+    state: str | None = Field(default=None, max_length=2)
+    contact_name: str | None = None
+    contact_email: EmailStr | None = None
+    contact_phone: str | None = None
+    mcu: str | None = Field(default=None, pattern=r"^[0-9]{8}$")
+    correios_username: str | None = None
+    correios_password: str | None = None
+    active: bool = True
+
+
+class StoreOptionOut(BaseModel):
+    """Loja (licenciado) só com o necessário para escolher em listas."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    legal_name: str
+    trade_name: str | None
+    posting_agency_id: int | None
+
+
+class PostingAgencyOut(BaseModel):
+    """Nunca inclui a senha do Correios Atende — só se ela está cadastrada."""
+
+    id: int
+    legal_name: str
+    trade_name: str | None
+    tax_id: str
+    zip_code: str | None
+    address_street: str | None
+    address_number: str | None
+    address_complement: str | None
+    address_district: str | None
+    city: str | None
+    state: str | None
+    contact_name: str | None
+    contact_email: str | None
+    contact_phone: str | None
+    mcu: str | None
+    correios_username: str | None
+    has_correios_password: bool
+    active: bool
+    stores: list[StoreOptionOut] = []
+    updated_at: datetime
+
+
+class PostingAgencyStoresUpdate(BaseModel):
+    licensee_ids: list[int]
+
+
+class StorePostingAgencyOut(BaseModel):
+    """O que o portal da loja vê da sua agência postadora (sem credenciais)."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    legal_name: str
+    trade_name: str | None
+    mcu: str | None
+    city: str | None
+    state: str | None
+    contact_name: str | None
+    contact_phone: str | None

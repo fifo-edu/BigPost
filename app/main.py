@@ -9,6 +9,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api import (
     admin_clients,
+    agencia_equipe,
     auth,
     auth_agencia,
     auth_cliente,
@@ -25,6 +26,7 @@ from app.api import (
     licenses,
     licensees,
     params,
+    posting_agencies,
     products,
     shipments_agencia,
     shipments_cliente,
@@ -116,6 +118,7 @@ app.include_router(licensees.router)
 app.include_router(licensee_users.router)
 app.include_router(admin_clients.router)
 app.include_router(correios.router)
+app.include_router(posting_agencies.router)
 app.include_router(client_correios.router)
 app.include_router(products.router)
 app.include_router(licenses.router)
@@ -133,6 +136,7 @@ app.include_router(integrations_painel_master.router)
 app.include_router(auth_agencia.router)
 app.include_router(auth_support.router)
 app.include_router(clients.router)
+app.include_router(agencia_equipe.router)
 app.include_router(shipments_agencia.router)
 
 # Módulo Cliente (clientes da agência — portal e integração)

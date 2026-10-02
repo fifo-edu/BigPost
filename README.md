@@ -2,8 +2,8 @@
 
 Módulo operacional de criação, emissão e gerenciamento de postagens via Correios para agências franqueadas (AGF). O cadastro/licenciamento das agências é feito num sistema externo (Painel Master — ver seção própria abaixo); o BigPost não licencia agências: ele oferece às agências já licenciadas as ferramentas para operar suas postagens e clientes, com quatro frentes:
 
-- **Administração interna** (equipe do BigPost): usuários da agência, credenciais Correios, cobrança, parametrização.
-- **Módulo Agência** (papéis Master, Administrador, Financeiro): gestão da agência — cadastro de clientes, relação com os módulos Cliente e Operador.
+- **Administração interna** (equipe do BigPost): agências postadoras (AGF, com MCU e login Correios Atende), clientes, cobrança, parametrização. Lojas e licenças não aparecem aqui — vêm do Painel Master.
+- **Módulo Agência** (papéis Master, Administrador, Financeiro): gestão da loja — cadastro de clientes, equipe da loja (usuários, só Administrador+), relação com os módulos Cliente e Operador.
 - **Módulo Operador** (papéis Operador de Caixa, Expedição): fila de trabalho da equipe operacional — aferição (peso/preço) e postagem (código de rastreio) das encomendas.
 - **Módulo Cliente**: os clientes de uma agência emitem etiquetas (manual pelo portal, ou por integração via API key) e acompanham o envio até a entrega, com notificação por webhook a cada mudança de status.
 
@@ -14,8 +14,9 @@ FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Sem dependências externas de a
 ## Modelo de dados — visão geral
 
 - `users` — equipe interna do BigPost (papéis: Master, Supervisor, Operador).
-- `licensees` — agências franqueadas licenciadas. Cadastro detalhado (endereço completo, pessoa de contato, dados de cobrança) + **MCU** (código de 8 dígitos que identifica a franqueada nos Correios — o resto já é dado de CNPJ/endereço).
-- `correios_credentials` — usuário/senha (e token) do site **www.correiosatende.correios.com.br**, por agência, **criptografados em repouso** (Fernet) — nunca devolvidos em texto puro pela API.
+- `licensees` — lojas licenciadas (cadastro e licença vêm do Painel Master). Cada loja posta por uma agência postadora (`posting_agency_id`).
+- `posting_agencies` — agências postadoras (AGF, ex.: AGF Ozanan), cadastradas no Admin: CNPJ, endereço, contato, **MCU** e usuário/senha do site **www.correiosatende.correios.com.br** (senha **criptografada em repouso**, nunca devolvida pela API). Uma agência atende várias lojas.
+- `correios_credentials` — **legado**: credencial Correios Atende por licenciado, de antes da separação loja × agência postadora. Sem uso pelas telas; substituída por `posting_agencies`.
 - `client_contract_credentials` — usuário, código de acesso CWS (criptografado), cartão de postagem, contrato e DR próprios de cada cliente final; cadastrados pela agência no portal Agência junto ao cadastro do cliente. Não confundir com o login Correios Atende da agência.
 - `licensee_users` — equipe de uma agência, compartilhada pelos portais Agência e Operador. Hierarquia de 5 papéis: **Master > Administrador > Financeiro > {Operador de Caixa, Expedição}** (esses dois últimos em pé de igualdade — um não manda no outro); os 3 primeiros usam o portal Agência, os 2 últimos o portal Operador. Login próprio, cookie `session_agencia`.
 - `clients` — clientes de uma agência (módulo Cliente): quem emite etiqueta com ela. Cadastro detalhado (endereço, contato) + login próprio (usuário/senha, cookie `session_cliente`) + **API key** (`bp_live_...`) para integração programática.

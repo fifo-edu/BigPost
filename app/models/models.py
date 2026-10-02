@@ -128,6 +128,8 @@ class Licensee(Base):
     status: Mapped[str] = mapped_column(String(20), default="Ativo", nullable=False)
 
     notes: Mapped[str | None] = mapped_column(Text)
+    # Agência postadora (AGF) por onde esta loja posta — ver PostingAgency.
+    posting_agency_id: Mapped[int | None] = mapped_column(ForeignKey("posting_agencies.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
     created_by: Mapped[str | None] = mapped_column(String(80))
@@ -140,6 +142,43 @@ class Licensee(Base):
         CheckConstraint(
             "correios_mcu is null or correios_mcu ~ '^[0-9]{8}$'", name="ck_licensees_mcu_format"
         ),
+    )
+
+
+class PostingAgency(Base):
+    """Agência postadora: a AGF (ex.: AGF Ozanan) por onde as lojas
+    licenciadas postam. Cadastrada no Admin do BigPost — diferente da loja
+    (Licensee), que vem do Painel Master. Uma agência atende várias lojas;
+    cada loja posta por uma só (Licensee.posting_agency_id). Guarda o MCU e o
+    login do site Correios Atende, com a senha criptografada em repouso
+    (app/services/crypto.py) e nunca devolvida em texto puro pela API."""
+
+    __tablename__ = "posting_agencies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    legal_name: Mapped[str] = mapped_column(String(180), nullable=False)
+    trade_name: Mapped[str | None] = mapped_column(String(180))
+    tax_id: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)  # CNPJ
+    zip_code: Mapped[str | None] = mapped_column(String(10))
+    address_street: Mapped[str | None] = mapped_column(String(160))
+    address_number: Mapped[str | None] = mapped_column(String(20))
+    address_complement: Mapped[str | None] = mapped_column(String(80))
+    address_district: Mapped[str | None] = mapped_column(String(80))
+    city: Mapped[str | None] = mapped_column(String(100))
+    state: Mapped[str | None] = mapped_column(String(2))
+    contact_name: Mapped[str | None] = mapped_column(String(120))
+    contact_email: Mapped[str | None] = mapped_column(String(160))
+    contact_phone: Mapped[str | None] = mapped_column(String(30))
+    mcu: Mapped[str | None] = mapped_column(String(8))
+    correios_username: Mapped[str | None] = mapped_column(String(120))
+    correios_password_encrypted: Mapped[str | None] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
+    created_by: Mapped[str | None] = mapped_column(String(80))
+
+    __table_args__ = (
+        CheckConstraint("mcu is null or mcu ~ '^[0-9]{8}$'", name="ck_posting_agencies_mcu_format"),
     )
 
 
