@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 # --------------------------- Auth ---------------------------
@@ -524,6 +524,14 @@ class ShipmentOut(BaseModel):
     weight_declared_kg: float | None
     declared_value: float | None
     weight_confirmed_kg: float | None
+    length_cm: float | None = None
+    width_cm: float | None = None
+    height_cm: float | None = None
+    length_measured_cm: float | None = None
+    width_measured_cm: float | None = None
+    height_measured_cm: float | None = None
+    cubed_weight_kg: float | None = None
+    billable_weight_kg: float | None = None
     price_confirmed: float | None
     tracking_code: str | None
     status: str
@@ -540,8 +548,19 @@ class ShipmentOut(BaseModel):
 
 # --------------------------- Encomendas (módulo Agência) ---------------------------
 class ShipmentAfericaoRequest(BaseModel):
-    weight_confirmed_kg: float
-    price_confirmed: float
+    weight_confirmed_kg: float = Field(gt=0)
+    price_confirmed: float = Field(ge=0)
+    # Medidas do cubômetro (cm). Opcionais, mas se vier uma, vêm as três.
+    length_measured_cm: float | None = Field(default=None, gt=0)
+    width_measured_cm: float | None = Field(default=None, gt=0)
+    height_measured_cm: float | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _all_or_no_dimensions(self):
+        dims = [self.length_measured_cm, self.width_measured_cm, self.height_measured_cm]
+        if any(d is not None for d in dims) and not all(d is not None for d in dims):
+            raise ValueError("Informe as três medidas (comprimento, largura e altura) ou nenhuma")
+        return self
 
 
 class ShipmentPostagemRequest(BaseModel):

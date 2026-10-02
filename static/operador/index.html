@@ -43,10 +43,35 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
 .badge.Postado,.badge.Entregue{background:#e2f5e9;color:#187a3f}
 .badge.Cancelado,.badge.Devolvido{background:#fbe4e4;color:#a53030}
 .badge[class*="Trânsito"]{background:#eef0fb;color:#4b3fa0}
+dialog{border:0;border-radius:12px;padding:20px;width:min(460px,92vw);box-shadow:0 8px 30px rgba(0,0,0,.2)}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+.cubagem{background:var(--bg);border-radius:8px;padding:10px;margin-top:10px;font-size:13px}
 </style>
 </head>
 <body>
 <script src="/br-utils.js"></script>
+
+<dialog id="aferirDlg">
+  <form id="aferirForm" method="dialog">
+    <h3 id="aferirTitle">Aferir encomenda</h3>
+    <p class="notice" id="aferirDecl"></p>
+    <div class="grid">
+      <div class="field"><label>Comprimento (cm)</label><input id="afC" type="number" step="0.1" min="0" inputmode="decimal"></div>
+      <div class="field"><label>Largura (cm)</label><input id="afL" type="number" step="0.1" min="0" inputmode="decimal"></div>
+      <div class="field"><label>Altura (cm)</label><input id="afA" type="number" step="0.1" min="0" inputmode="decimal"></div>
+    </div>
+    <div class="grid g2">
+      <div class="field"><label>Peso real (kg)</label><input id="afPeso" type="number" step="0.001" min="0" required inputmode="decimal"></div>
+      <div class="field"><label>Preço (R$)</label><input id="afPreco" type="number" step="0.01" min="0" required inputmode="decimal"></div>
+    </div>
+    <div class="cubagem" id="afCubagem">Informe as medidas do cubômetro para calcular o peso cúbico.</div>
+    <p id="afMsg" style="color:#a53030"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="action secondary" id="afCancel">Cancelar</button>
+      <button type="submit" class="action">Confirmar aferição</button>
+    </div>
+  </form>
+</dialog>
 
 <div id="login" class="login">
   <form id="loginForm" class="box" autocomplete="on">
@@ -104,7 +129,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
       <br>
       <div class="card scroll">
         <table>
-          <thead><tr><th>ID</th><th>Destinatário</th><th>Cidade/UF</th><th>Peso decl.</th><th>Status</th><th>Rastreio</th><th>Ações</th></tr></thead>
+          <thead><tr><th>ID</th><th>Destinatário</th><th>Cidade/UF</th><th>Peso decl.</th><th>Peso tarif.</th><th>Status</th><th>Rastreio</th><th>Ações</th></tr></thead>
           <tbody id="shipments"></tbody>
         </table>
       </div>
@@ -244,6 +269,7 @@ async function loadShipments() {
     <td>${esc(s.recipient_name)}</td>
     <td>${esc(s.recipient_city || '')}${s.recipient_state ? '/' + esc(s.recipient_state) : ''}</td>
     <td>${s.weight_declared_kg ?? '—'}</td>
+    <td>${s.billable_weight_kg ?? s.weight_confirmed_kg ?? '—'}</td>
     <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
     <td>${esc(s.tracking_code || '—')}</td>
     <td>
@@ -251,23 +277,56 @@ async function loadShipments() {
       ${s.status === 'Aferido' ? `<button class="action secondary" onclick="postar(${s.id})">Postar</button>` : ''}
       <button class="action secondary" onclick="evento(${s.id})">+ Evento</button>
     </td>
-  </tr>`).join('') || '<tr><td colspan="7" class="notice">Nenhuma encomenda nessa fila.</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="8" class="notice">Nenhuma encomenda nessa fila.</td></tr>';
 }
 $('statusFilter').onchange = loadShipments;
 $('reload').onclick = loadShipments;
 
-window.aferir = async (id) => {
-  const weight = prompt('Peso confirmado (kg):');
-  if (weight === null) return;
-  const price = prompt('Preço confirmado (R$):');
-  if (price === null) return;
+// Prévia da cubagem com a regra padrão (C x L x A / 6000, vale acima de 5 kg).
+// O valor gravado é o que o servidor calcula com os parâmetros do sistema.
+const CUB_DIVISOR = 6000, CUB_MIN_KG = 5;
+let aferirId = null;
+const num = (id) => { const v = $(id).value.trim().replace(',', '.'); return v === '' ? null : +v; };
+function previewCubagem() {
+  const c = num('afC'), l = num('afL'), a = num('afA'), peso = num('afPeso');
+  if (!c || !l || !a) { $('afCubagem').textContent = 'Informe as medidas do cubômetro para calcular o peso cúbico.'; return; }
+  const cub = +(c * l * a / CUB_DIVISOR).toFixed(3);
+  const tarif = peso == null ? null : (cub > CUB_MIN_KG ? Math.max(peso, cub) : peso);
+  $('afCubagem').innerHTML = `Peso cúbico: <b>${cub} kg</b>` +
+    (tarif == null ? '' : ` · Peso tarifado: <b>${+tarif.toFixed(3)} kg</b>`) +
+    (cub > CUB_MIN_KG ? '' : ' <span class="notice">(cúbico até 5 kg: vale o peso real)</span>');
+}
+['afC', 'afL', 'afA', 'afPeso'].forEach(id => $(id).addEventListener('input', previewCubagem));
+
+window.aferir = (id) => {
+  const s = S.shipments.find(x => x.id === id) || {};
+  aferirId = id;
+  $('aferirForm').reset();
+  $('afMsg').textContent = '';
+  $('aferirTitle').textContent = `Aferir encomenda #${id}`;
+  const decl = [s.length_cm, s.width_cm, s.height_cm].every(v => v != null) ? `${s.length_cm}x${s.width_cm}x${s.height_cm} cm, ` : '';
+  $('aferirDecl').textContent = `${s.recipient_name || ''} · declarado: ${decl}${s.weight_declared_kg ?? '—'} kg`;
+  previewCubagem();
+  $('aferirDlg').showModal();
+  $('afC').focus();
+};
+$('afCancel').onclick = () => $('aferirDlg').close();
+$('aferirForm').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const c = num('afC'), l = num('afL'), a = num('afA');
+  const dims = [c, l, a].filter(v => v != null).length;
+  if (dims !== 0 && dims !== 3) { $('afMsg').textContent = 'Informe as três medidas ou nenhuma.'; return; }
   try {
-    await api(`/api/v1/agencia/shipments/${id}/aferir`, {
+    await api(`/api/v1/agencia/shipments/${aferirId}/aferir`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weight_confirmed_kg: +weight, price_confirmed: +price })
+      body: JSON.stringify({
+        weight_confirmed_kg: num('afPeso'), price_confirmed: num('afPreco'),
+        length_measured_cm: c, width_measured_cm: l, height_measured_cm: a
+      })
     });
+    $('aferirDlg').close();
     await loadShipments();
-  } catch (e) { alert(e.message); }
+  } catch (e) { $('afMsg').textContent = e.message; }
 };
 
 window.postar = async (id) => {

@@ -28,6 +28,14 @@ DEFAULTS: dict[str, dict] = {
         "value": 5,
         "description": "Tentativas de login incorretas permitidas antes de exigir espera.",
     },
+    "afericao.cubagem_divisor": {
+        "value": 6000,
+        "description": "Divisor do peso cúbico na aferição (C x L x A em cm / divisor = kg).",
+    },
+    "afericao.cubagem_min_kg": {
+        "value": 5.0,
+        "description": "Peso cúbico (kg) acima do qual passa a valer o maior entre peso real e cúbico.",
+    },
 }
 
 

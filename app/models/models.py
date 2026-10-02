@@ -433,7 +433,14 @@ class Shipment(Base):
 
     # Aferição (preenchido pela agência)
     weight_confirmed_kg: Mapped[float | None] = mapped_column(Numeric(8, 3))
-    price_confirmed: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    # Medidas conferidas no cubômetro e peso cúbico/tarifado resultantes
+    # (ver app/services/cubagem.py).
+    length_measured_cm: Mapped[float | None] = mapped_column(Numeric(6, 1))
+    width_measured_cm: Mapped[float | None] = mapped_column(Numeric(6, 1))
+    height_measured_cm: Mapped[float | None] = mapped_column(Numeric(6, 1))
+    cubed_weight_kg: Mapped[float | None] = mapped_column(Numeric(8, 3))
+    billable_weight_kg: Mapped[float | None] = mapped_column(Numeric(8, 3))
+    price_confirmed:Mapped[float | None] = mapped_column(Numeric(12, 2))
     afericao_by: Mapped[int | None] = mapped_column(ForeignKey("licensee_users.id"))
     afericao_at: Mapped[datetime | None] = mapped_column(DateTime)
 

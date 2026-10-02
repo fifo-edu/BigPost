@@ -20,6 +20,7 @@ from app.schemas.schemas import (
     ShipmentPostagemRequest,
 )
 from app.services.audit import log_action
+from app.services.cubagem import calcular_com_params
 from app.services.webhooks import send_shipment_webhook
 
 router = APIRouter(prefix="/api/v1/agencia/shipments", tags=["shipments-agencia"])
@@ -88,12 +89,32 @@ def aferir_shipment(
     if shipment.status != "Pendente":
         raise HTTPException(status_code=400, detail="Só é possível aferir encomendas com status Pendente")
 
+    cubagem = calcular_com_params(
+        db,
+        payload.weight_confirmed_kg,
+        payload.length_measured_cm,
+        payload.width_measured_cm,
+        payload.height_measured_cm,
+    )
     shipment.weight_confirmed_kg = payload.weight_confirmed_kg
+    shipment.length_measured_cm = payload.length_measured_cm
+    shipment.width_measured_cm = payload.width_measured_cm
+    shipment.height_measured_cm = payload.height_measured_cm
+    shipment.cubed_weight_kg = cubagem.cubed_weight_kg
+    shipment.billable_weight_kg = cubagem.billable_weight_kg
     shipment.price_confirmed = payload.price_confirmed
     shipment.afericao_by = user.id
     shipment.afericao_at = datetime.utcnow()
     shipment.status = "Aferido"
-    _add_event(db, shipment, "Aferido", "Peso e preço confirmados pela agência", user.username)
+    if cubagem.cubed_weight_kg is None:
+        descricao = "Peso e preço confirmados pela agência"
+    else:
+        descricao = (
+            f"Aferido: {payload.length_measured_cm:g}x{payload.width_measured_cm:g}x{payload.height_measured_cm:g} cm, "
+            f"peso real {payload.weight_confirmed_kg:g} kg, cúbico {cubagem.cubed_weight_kg:g} kg, "
+            f"tarifado {cubagem.billable_weight_kg:g} kg"
+        )
+    _add_event(db, shipment, "Aferido", descricao, user.username)
     db.commit()
     db.refresh(shipment)
 
@@ -103,7 +124,13 @@ def aferir_shipment(
         role=user.role,
         action="AFERIR_ENCOMENDA",
         entity=f"shipment:{shipment.id}",
-        after={"weight_confirmed_kg": float(payload.weight_confirmed_kg), "price_confirmed": float(payload.price_confirmed)},
+        after={
+            "weight_confirmed_kg": float(payload.weight_confirmed_kg),
+            "price_confirmed": float(payload.price_confirmed),
+            "measured_cm": [payload.length_measured_cm, payload.width_measured_cm, payload.height_measured_cm],
+            "cubed_weight_kg": cubagem.cubed_weight_kg,
+            "billable_weight_kg": cubagem.billable_weight_kg,
+        },
         origin="Agência",
         ip_address=client_ip(request),
     )
