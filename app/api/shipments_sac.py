@@ -23,11 +23,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import require_licensee_any_role
-from app.models.models import Client, LicenseeUser, Shipment, ShipmentEvent
+from app.models.models import LicenseeUser, Shipment, ShipmentEvent
 from app.schemas.schemas import ShipmentErrorFlagRequest, ShipmentOut
 from app.services.audit import log_action
-from app.services.email import send_email
-from app.services.webhooks import send_shipment_webhook
+from app.services.shipment_errors import marcar_erro
 
 router = APIRouter(prefix="/api/v1/sac/shipments", tags=["shipments-sac"])
 
@@ -77,39 +76,7 @@ def flag_erro(
             detail=f"Não é possível carimbar erro numa encomenda com status {shipment.status}",
         )
 
-    shipment.status = "Erro"
-    shipment.error_code = payload.error_code
-    shipment.error_message = payload.error_message
-    shipment.error_flagged_at = datetime.utcnow()
-
-    db.add(
-        ShipmentEvent(
-            shipment_id=shipment.id,
-            status="Erro",
-            description=payload.error_message,
-            created_by=user.username,
-        )
-    )
-    db.commit()
-    db.refresh(shipment)
-
-    client = db.get(Client, shipment.client_id)
-    if client and client.contact_email:
-        sent = send_email(
-            client.contact_email,
-            f"Encomenda #{shipment.id} com pendência",
-            (
-                f"Olá, {client.legal_name}.\n\n"
-                f"A encomenda #{shipment.id} (destinatário: {shipment.recipient_name}) não pôde ser "
-                f"processada:\n\n{payload.error_message}\n\n"
-                "Acesse o Portal BigPost Cliente para recriar a etiqueta com os dados corrigidos, se for "
-                "o caso."
-            ),
-        )
-        if sent:
-            shipment.error_notified_at = datetime.utcnow()
-            db.commit()
-            db.refresh(shipment)
+    marcar_erro(db, shipment, payload.error_code, payload.error_message, user.username)
 
     log_action(
         db,
@@ -121,8 +88,6 @@ def flag_erro(
         origin="SAC",
         ip_address=client_ip(request),
     )
-    if client:
-        send_shipment_webhook(db, client, shipment, "shipment.erro")
     return shipment
 
 

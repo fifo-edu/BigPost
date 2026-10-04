@@ -68,7 +68,8 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
     <p id="afMsg" style="color:#a53030"></p>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button type="button" class="action secondary" id="afCancel">Cancelar</button>
-      <button type="submit" class="action">Confirmar aferição</button>
+      <button type="submit" class="action secondary" id="afSoAferir" value="aferir">Só aferir</button>
+      <button type="submit" class="action hidden" id="afAferirPostar" value="postar">Aferir e postar</button>
     </div>
   </form>
 </dialog>
@@ -126,7 +127,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
           <div class="field"><label>&nbsp;</label><button id="reload" class="action secondary">Atualizar</button></div>
         </div>
       </div>
-      <br>
+      <p class="notice" id="postagemInfo"></p>
       <div class="card scroll">
         <table>
           <thead><tr><th>ID</th><th>Destinatário</th><th>Cidade/UF</th><th>Peso decl.</th><th>Peso tarif.</th><th>Status</th><th>Rastreio</th><th>Ações</th></tr></thead>
@@ -260,7 +261,18 @@ $('supportCancel').onclick = async () => {
   $('supportToggle').textContent = 'Sou da equipe BigPost (suporte)';
 };
 
+async function loadPostagemStatus() {
+  try { S.postagem = await api('/api/v1/agencia/shipments/postagem-automatica'); } catch (e) { S.postagem = null; }
+  const p = S.postagem;
+  $('postagemInfo').textContent = !p || !p.ativa ? ''
+    : p.pronta ? `Postagem automática ligada — agência postadora: ${p.agencia}.`
+    : `Postagem automática indisponível: ${p.motivo}`;
+  $('afAferirPostar').classList.toggle('hidden', !p?.pronta);
+  $('afSoAferir').classList.toggle('secondary', !!p?.pronta);
+}
+
 async function loadShipments() {
+  await loadPostagemStatus();
   const status = $('statusFilter').value;
   const rows = await api('/api/v1/agencia/shipments' + (status ? `?status=${encodeURIComponent(status)}` : ''));
   S.shipments = rows;
@@ -271,10 +283,12 @@ async function loadShipments() {
     <td>${s.weight_declared_kg ?? '—'}</td>
     <td>${s.billable_weight_kg ?? s.weight_confirmed_kg ?? '—'}</td>
     <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
-    <td>${esc(s.tracking_code || '—')}</td>
+    <td>${esc(s.tracking_code || '—')}${s.posted_via === 'atende' ? ' <span class="notice">(automático)</span>' : ''}
+      ${s.status === 'Aferido' && s.auto_post_last_error ? `<div class="notice" style="color:#a53030">${esc(s.auto_post_last_error)}</div>` : ''}</td>
     <td>
       ${s.status === 'Pendente' ? `<button class="action secondary" onclick="aferir(${s.id})">Aferir</button>` : ''}
-      ${s.status === 'Aferido' ? `<button class="action secondary" onclick="postar(${s.id})">Postar</button>` : ''}
+      ${s.status === 'Aferido' && S.postagem?.pronta ? `<button class="action" onclick="postarAutomatico(${s.id})">Postar pelo Correios Atende</button>` : ''}
+      ${s.status === 'Aferido' ? `<button class="action secondary" onclick="postar(${s.id})">Postar manual</button>` : ''}
       <button class="action secondary" onclick="evento(${s.id})">+ Evento</button>
     </td>
   </tr>`).join('') || '<tr><td colspan="8" class="notice">Nenhuma encomenda nessa fila.</td></tr>';
@@ -313,11 +327,12 @@ window.aferir = (id) => {
 $('afCancel').onclick = () => $('aferirDlg').close();
 $('aferirForm').onsubmit = async (ev) => {
   ev.preventDefault();
+  const postarJunto = ev.submitter?.value === 'postar';
   const c = num('afC'), l = num('afL'), a = num('afA');
   const dims = [c, l, a].filter(v => v != null).length;
   if (dims !== 0 && dims !== 3) { $('afMsg').textContent = 'Informe as três medidas ou nenhuma.'; return; }
   try {
-    await api(`/api/v1/agencia/shipments/${aferirId}/aferir`, {
+    const out = await api(`/api/v1/agencia/shipments/${aferirId}/${postarJunto ? 'aferir-e-postar' : 'aferir'}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         weight_confirmed_kg: num('afPeso'), price_confirmed: num('afPreco'),
@@ -326,7 +341,24 @@ $('aferirForm').onsubmit = async (ev) => {
     });
     $('aferirDlg').close();
     await loadShipments();
+    if (postarJunto) avisarPostagem(out);
   } catch (e) { $('afMsg').textContent = e.message; }
+};
+
+function avisarPostagem(s) {
+  if (s.status === 'Postado') alert(`Postado pelo Correios Atende. Rastreio: ${s.tracking_code}`);
+  else if (s.status === 'Erro') alert(`Os Correios recusaram o objeto — a encomenda foi para a fila do SAC.\n\n${s.error_message || ''}`);
+  else alert(`Aferição gravada, mas a postagem automática não foi feita:\n\n${s.auto_post_last_error || 'motivo não informado'}\n\nTente de novo ou poste manualmente.`);
+}
+
+window.postarAutomatico = async (id) => {
+  const s = S.shipments.find(x => x.id === id) || {};
+  if (s.auto_post_last_error && !confirm('A última tentativa falhou. Se foi por queda de comunicação, confira no Correios Atende se o objeto já não foi postado antes de tentar de novo. Continuar?')) return;
+  try {
+    const out = await api(`/api/v1/agencia/shipments/${id}/postar-automatico`, { method: 'POST' });
+    await loadShipments();
+    avisarPostagem(out);
+  } catch (e) { alert(e.message); }
 };
 
 window.postar = async (id) => {

@@ -534,6 +534,11 @@ class ShipmentOut(BaseModel):
     billable_weight_kg: float | None = None
     price_confirmed: float | None
     tracking_code: str | None
+    posted_via: str | None = None
+    postage_cost: float | None = None
+    auto_post_attempts: int = 0
+    auto_post_last_attempt_at: datetime | None = None
+    auto_post_last_error: str | None = None
     status: str
     # Fila de erro / SAC — ver app/api/shipments_sac.py.
     error_code: str | None = None
@@ -565,6 +570,16 @@ class ShipmentAfericaoRequest(BaseModel):
 
 class ShipmentPostagemRequest(BaseModel):
     tracking_code: str
+
+
+class PostagemAutomaticaStatusOut(BaseModel):
+    """Se a postagem automática pelo Correios Atende pode ser usada agora
+    pela loja do usuário, e por que não, se for o caso."""
+
+    ativa: bool
+    pronta: bool
+    agencia: str | None = None
+    motivo: str | None = None
 
 
 class ShipmentEventCreate(BaseModel):
