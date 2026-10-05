@@ -489,14 +489,11 @@ class Shipment(Base):
     tracking_code: Mapped[str | None] = mapped_column(String(30))
     postado_by: Mapped[int | None] = mapped_column(ForeignKey("licensee_users.id"))
     postado_at: Mapped[datetime | None] = mapped_column(DateTime)
-    # Postagem automática pelo Correios Atende (app/services/correios_atende.py):
-    # 'manual' (botão Postar) ou 'atende'; custo cobrado pelos Correios, se
-    # informado; e controle das tentativas que não deram certo.
+    # Como a encomenda foi postada: 'manual' (botão Postar) ou 'correios'
+    # (resultado buscado na API dos Correios depois da aferição no balcão da
+    # AGF), e o custo cobrado pelos Correios, quando a API informar.
     posted_via: Mapped[str | None] = mapped_column(String(10))
     postage_cost: Mapped[float | None] = mapped_column(Numeric(12, 2))
-    auto_post_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    auto_post_last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime)
-    auto_post_last_error: Mapped[str | None] = mapped_column(Text)
 
     # Fila de erro / SAC — preenchido quando a validação do CWS/PPN (hoje
     # ainda manual, futuramente um webhook — ver app/api/shipments_sac.py)

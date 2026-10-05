@@ -45,16 +45,23 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
 .badge[class*="Trânsito"]{background:#eef0fb;color:#4b3fa0}
 dialog{border:0;border-radius:12px;padding:20px;width:min(460px,92vw);box-shadow:0 8px 30px rgba(0,0,0,.2)}
 dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog .field{min-width:0}
+dialog input{width:100%;min-width:0}
 .cubagem{background:var(--bg);border-radius:8px;padding:10px;margin-top:10px;font-size:13px}
 </style>
 </head>
 <body>
 <script src="/br-utils.js"></script>
+<script src="/cubometro.js"></script>
 
 <dialog id="aferirDlg">
   <form id="aferirForm" method="dialog">
     <h3 id="aferirTitle">Aferir encomenda</h3>
     <p class="notice" id="aferirDecl"></p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <button type="button" class="action secondary" id="afLerCubo">Ler cubômetro</button>
+      <span class="notice" id="afCuboMsg"></span>
+    </div>
     <div class="grid">
       <div class="field"><label>Comprimento (cm)</label><input id="afC" type="number" step="0.1" min="0" inputmode="decimal"></div>
       <div class="field"><label>Largura (cm)</label><input id="afL" type="number" step="0.1" min="0" inputmode="decimal"></div>
@@ -68,8 +75,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
     <p id="afMsg" style="color:#a53030"></p>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button type="button" class="action secondary" id="afCancel">Cancelar</button>
-      <button type="submit" class="action secondary" id="afSoAferir" value="aferir">Só aferir</button>
-      <button type="submit" class="action hidden" id="afAferirPostar" value="postar">Aferir e postar</button>
+      <button type="submit" class="action">Confirmar aferição</button>
     </div>
   </form>
 </dialog>
@@ -108,6 +114,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
     </div>
     <nav>
       <button data-p="fila">Fila de Encomendas</button>
+      <button data-p="cubometro">Cubômetro</button>
       <button id="logoutBtn" class="navlogout">Sair</button>
     </nav>
   </aside>
@@ -127,12 +134,58 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
           <div class="field"><label>&nbsp;</label><button id="reload" class="action secondary">Atualizar</button></div>
         </div>
       </div>
-      <p class="notice" id="postagemInfo"></p>
+      <br>
       <div class="card scroll">
         <table>
           <thead><tr><th>ID</th><th>Destinatário</th><th>Cidade/UF</th><th>Peso decl.</th><th>Peso tarif.</th><th>Status</th><th>Rastreio</th><th>Ações</th></tr></thead>
           <tbody id="shipments"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section id="cubometro" class="page">
+      <div class="card">
+        <h3>Conexão (porta COM)</h3>
+        <p class="notice" id="cuboSuporte">O cubômetro é lido pela porta COM direto do navegador (Chrome ou Edge). Na primeira vez, o navegador pede para escolher a porta. A configuração fica salva neste computador.</p>
+        <div class="grid">
+          <div class="field"><label>Velocidade (baud)</label>
+            <select id="cuboBaud"><option>1200</option><option>2400</option><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option></select></div>
+          <div class="field"><label>Bits / paridade / parada</label>
+            <div style="display:flex;gap:6px">
+              <select id="cuboBits"><option>8</option><option>7</option></select>
+              <select id="cuboParity"><option value="none">nenhuma</option><option value="even">par</option><option value="odd">ímpar</option></select>
+              <select id="cuboStop"><option>1</option><option>2</option></select>
+            </div></div>
+          <div class="field"><label>Comando para pedir leitura (opcional)</label><input id="cuboCmd" placeholder="ex.: \r ou \x05 — vazio só escuta"></div>
+        </div>
+        <br>
+        <button class="action" id="cuboConectar">Conectar</button>
+        <button class="action secondary" id="cuboTrocar">Escolher outra porta</button>
+        <button class="action secondary" id="cuboDesconectar">Desconectar</button>
+        <span class="notice" id="cuboStatus"></span>
+      </div>
+      <br>
+      <div class="card">
+        <h3>O que o aparelho enviou</h3>
+        <p class="notice">Conecte e faça uma medição no cubômetro. Cada linha recebida aparece aqui com os números encontrados nela, numerados a partir de 0. Use essa numeração para dizer abaixo qual número é cada medida.</p>
+        <pre id="cuboLog" style="background:var(--bg);padding:10px;border-radius:8px;min-height:120px;max-height:260px;overflow:auto;white-space:pre-wrap;font-size:12px"></pre>
+        <button class="action secondary" id="cuboLimpar">Limpar</button>
+      </div>
+      <br>
+      <div class="card">
+        <h3>Como interpretar a leitura</h3>
+        <div class="grid">
+          <div class="field"><label>Comprimento é o número</label><input id="cuboIdxC" type="number" min="-1"></div>
+          <div class="field"><label>Largura é o número</label><input id="cuboIdxL" type="number" min="-1"></div>
+          <div class="field"><label>Altura é o número</label><input id="cuboIdxA" type="number" min="-1"></div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Peso é o número (-1 = não vem)</label><input id="cuboIdxP" type="number" min="-1"></div>
+          <div class="field"><label>Unidade das medidas</label><select id="cuboDivDim"><option value="1">centímetros</option><option value="10">milímetros</option></select></div>
+          <div class="field"><label>Unidade do peso</label><select id="cuboDivPeso"><option value="1">quilos</option><option value="1000">gramas</option></select></div>
+        </div>
+        <p class="notice" id="cuboPreview"></p>
+        <button class="action" id="cuboSalvar">Salvar configuração</button>
       </div>
     </section>
   </main>
@@ -161,6 +214,7 @@ function openp(p) {
   $(p).classList.add('active');
   $('title').textContent = document.querySelector(`button[data-p="${p}"]`).textContent;
   if (p === 'fila') loadShipments();
+  if (p === 'cubometro') carregarCuboConfig();
 }
 
 $('logoutBtn').onclick = async () => {
@@ -261,18 +315,7 @@ $('supportCancel').onclick = async () => {
   $('supportToggle').textContent = 'Sou da equipe BigPost (suporte)';
 };
 
-async function loadPostagemStatus() {
-  try { S.postagem = await api('/api/v1/agencia/shipments/postagem-automatica'); } catch (e) { S.postagem = null; }
-  const p = S.postagem;
-  $('postagemInfo').textContent = !p || !p.ativa ? ''
-    : p.pronta ? `Postagem automática ligada — agência postadora: ${p.agencia}.`
-    : `Postagem automática indisponível: ${p.motivo}`;
-  $('afAferirPostar').classList.toggle('hidden', !p?.pronta);
-  $('afSoAferir').classList.toggle('secondary', !!p?.pronta);
-}
-
 async function loadShipments() {
-  await loadPostagemStatus();
   const status = $('statusFilter').value;
   const rows = await api('/api/v1/agencia/shipments' + (status ? `?status=${encodeURIComponent(status)}` : ''));
   S.shipments = rows;
@@ -283,12 +326,10 @@ async function loadShipments() {
     <td>${s.weight_declared_kg ?? '—'}</td>
     <td>${s.billable_weight_kg ?? s.weight_confirmed_kg ?? '—'}</td>
     <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td>
-    <td>${esc(s.tracking_code || '—')}${s.posted_via === 'atende' ? ' <span class="notice">(automático)</span>' : ''}
-      ${s.status === 'Aferido' && s.auto_post_last_error ? `<div class="notice" style="color:#a53030">${esc(s.auto_post_last_error)}</div>` : ''}</td>
+    <td>${esc(s.tracking_code || '—')}</td>
     <td>
       ${s.status === 'Pendente' ? `<button class="action secondary" onclick="aferir(${s.id})">Aferir</button>` : ''}
-      ${s.status === 'Aferido' && S.postagem?.pronta ? `<button class="action" onclick="postarAutomatico(${s.id})">Postar pelo Correios Atende</button>` : ''}
-      ${s.status === 'Aferido' ? `<button class="action secondary" onclick="postar(${s.id})">Postar manual</button>` : ''}
+      ${s.status === 'Aferido' ? `<button class="action secondary" onclick="postar(${s.id})">Postar</button>` : ''}
       <button class="action secondary" onclick="evento(${s.id})">+ Evento</button>
     </td>
   </tr>`).join('') || '<tr><td colspan="8" class="notice">Nenhuma encomenda nessa fila.</td></tr>';
@@ -327,12 +368,11 @@ window.aferir = (id) => {
 $('afCancel').onclick = () => $('aferirDlg').close();
 $('aferirForm').onsubmit = async (ev) => {
   ev.preventDefault();
-  const postarJunto = ev.submitter?.value === 'postar';
   const c = num('afC'), l = num('afL'), a = num('afA');
   const dims = [c, l, a].filter(v => v != null).length;
   if (dims !== 0 && dims !== 3) { $('afMsg').textContent = 'Informe as três medidas ou nenhuma.'; return; }
   try {
-    const out = await api(`/api/v1/agencia/shipments/${aferirId}/${postarJunto ? 'aferir-e-postar' : 'aferir'}`, {
+    await api(`/api/v1/agencia/shipments/${aferirId}/aferir`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         weight_confirmed_kg: num('afPeso'), price_confirmed: num('afPreco'),
@@ -341,24 +381,7 @@ $('aferirForm').onsubmit = async (ev) => {
     });
     $('aferirDlg').close();
     await loadShipments();
-    if (postarJunto) avisarPostagem(out);
   } catch (e) { $('afMsg').textContent = e.message; }
-};
-
-function avisarPostagem(s) {
-  if (s.status === 'Postado') alert(`Postado pelo Correios Atende. Rastreio: ${s.tracking_code}`);
-  else if (s.status === 'Erro') alert(`Os Correios recusaram o objeto — a encomenda foi para a fila do SAC.\n\n${s.error_message || ''}`);
-  else alert(`Aferição gravada, mas a postagem automática não foi feita:\n\n${s.auto_post_last_error || 'motivo não informado'}\n\nTente de novo ou poste manualmente.`);
-}
-
-window.postarAutomatico = async (id) => {
-  const s = S.shipments.find(x => x.id === id) || {};
-  if (s.auto_post_last_error && !confirm('A última tentativa falhou. Se foi por queda de comunicação, confira no Correios Atende se o objeto já não foi postado antes de tentar de novo. Continuar?')) return;
-  try {
-    const out = await api(`/api/v1/agencia/shipments/${id}/postar-automatico`, { method: 'POST' });
-    await loadShipments();
-    avisarPostagem(out);
-  } catch (e) { alert(e.message); }
 };
 
 window.postar = async (id) => {
@@ -385,6 +408,76 @@ window.evento = async (id) => {
     await loadShipments();
   } catch (e) { alert(e.message); }
 };
+
+// --------------------------- Cubômetro (porta COM) ---------------------------
+const CUBO_CAMPOS = { cuboBaud: 'baudRate', cuboBits: 'dataBits', cuboParity: 'parity', cuboStop: 'stopBits', cuboCmd: 'comando',
+  cuboIdxC: 'idxC', cuboIdxL: 'idxL', cuboIdxA: 'idxA', cuboIdxP: 'idxP', cuboDivDim: 'divDim', cuboDivPeso: 'divPeso' };
+const CUBO_TEXTO = new Set(['parity', 'comando']);
+let cuboUltimaLinha = '';
+
+function cuboConfigDaTela() {
+  const cfg = Cubometro.config();
+  Object.entries(CUBO_CAMPOS).forEach(([id, k]) => { const v = $(id).value; cfg[k] = CUBO_TEXTO.has(k) ? v : +v; });
+  return cfg;
+}
+function cuboStatus() {
+  $('cuboStatus').textContent = Cubometro.conectado() ? 'Conectado.' : 'Desconectado.';
+}
+function cuboPreview() {
+  if (!cuboUltimaLinha) { $('cuboPreview').textContent = 'Faça uma leitura para ver o resultado com esta configuração.'; return; }
+  const r = Cubometro.interpretar(cuboUltimaLinha, cuboConfigDaTela());
+  $('cuboPreview').textContent = `Com esta configuração, a última leitura daria: C ${r.c ?? '—'} × L ${r.l ?? '—'} × A ${r.a ?? '—'} cm, peso ${r.peso ?? '—'} kg.`;
+}
+function carregarCuboConfig() {
+  const cfg = Cubometro.config();
+  Object.entries(CUBO_CAMPOS).forEach(([id, k]) => $(id).value = cfg[k]);
+  if (!Cubometro.suportado()) {
+    $('cuboSuporte').textContent = 'Este navegador não acessa porta COM. Abra o BigPost no Chrome ou no Edge.';
+    $('cuboSuporte').style.color = '#a53030';
+  }
+  cuboStatus(); cuboPreview();
+}
+Object.keys(CUBO_CAMPOS).forEach(id => $(id).addEventListener('input', cuboPreview));
+Cubometro.onLinha(linha => {
+  cuboUltimaLinha = linha;
+  const nums = Cubometro.interpretar(linha).numeros.map((n, i) => `[${i}] ${n}`).join('  ');
+  const hora = new Date().toLocaleTimeString('pt-BR');
+  $('cuboLog').textContent += `${hora}  ${JSON.stringify(linha)}\n          números: ${nums || '(nenhum)'}\n`;
+  $('cuboLog').scrollTop = $('cuboLog').scrollHeight;
+  cuboPreview();
+});
+async function cuboConectar(escolher) {
+  try {
+    Cubometro.salvarConfig(cuboConfigDaTela());
+    await Cubometro.desconectar();
+    await Cubometro.conectar({ escolher });
+  } catch (e) { if (e.name !== 'NotFoundError') alert(e.message); }
+  cuboStatus();
+}
+$('cuboConectar').onclick = () => cuboConectar(false);
+$('cuboTrocar').onclick = () => cuboConectar(true);
+$('cuboDesconectar').onclick = async () => { await Cubometro.desconectar(); cuboStatus(); };
+$('cuboLimpar').onclick = () => { $('cuboLog').textContent = ''; };
+$('cuboSalvar').onclick = () => { Cubometro.salvarConfig(cuboConfigDaTela()); alert('Configuração do cubômetro salva neste computador.'); };
+
+$('afLerCubo').onclick = async () => {
+  $('afCuboMsg').textContent = 'Aguardando a leitura do cubômetro...';
+  try {
+    const r = await Cubometro.lerMedidas();
+    if (r.c == null || r.l == null || r.a == null) {
+      $('afCuboMsg').textContent = `Leitura recebida, mas não deu para identificar as medidas (${r.linha}). Ajuste em Cubômetro.`;
+      return;
+    }
+    $('afC').value = r.c; $('afL').value = r.l; $('afA').value = r.a;
+    if (r.peso != null) $('afPeso').value = r.peso;
+    $('afCuboMsg').textContent = 'Medidas lidas do cubômetro.';
+    previewCubagem();
+    $(r.peso != null ? 'afPreco' : 'afPeso').focus();
+  } catch (e) {
+    $('afCuboMsg').textContent = e.name === 'NotFoundError' ? 'Nenhuma porta escolhida.' : e.message;
+  }
+};
+$('afLerCubo').classList.toggle('hidden', !Cubometro.suportado());
 </script>
 </body>
 </html>

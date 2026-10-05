@@ -36,10 +36,6 @@ DEFAULTS: dict[str, dict] = {
         "value": 5.0,
         "description": "Peso cúbico (kg) acima do qual passa a valer o maior entre peso real e cúbico.",
     },
-    "postagem.atende_automatica": {
-        "value": False,
-        "description": "Liga (true) a postagem automática pelo Correios Atende ao aferir. Desligada, o operador posta manualmente.",
-    },
 }
 
 
