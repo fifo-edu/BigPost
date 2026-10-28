@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import UNUSABLE_PASSWORD_HASH, require_licensee_role
-from app.models.models import Client, ClientContractCredential, LicenseeUser
-from app.schemas.schemas import ClientCreate, ClientCreateOut, ClientOut, PasswordLinkOut
+from app.api.correios_contracts import contrato_da_loja_ou_400, criar_contrato
+from app.models.models import Client, LicenseeUser
+from app.schemas.schemas import ClientContractChange, ClientCreate, ClientCreateOut, ClientOut, PasswordLinkOut
 from app.services.audit import log_action
-from app.services.crypto import encrypt
 from app.services.password_tokens import issue_and_notify
 from app.services.support_access import SUPPORT_USERNAME
 
@@ -44,26 +44,19 @@ def create_client(
     email = payload.contact_email.strip().lower()
     client = Client(
         licensee_id=user.licensee_id,
-        **payload.model_dump(exclude={"contact_email", "correios_credential"}),
+        **payload.model_dump(exclude={"contact_email", "correios_credential", "correios_contract_id"}),
         contact_email=email,
         username=email,
         password_hash=UNUSABLE_PASSWORD_HASH,
         created_by=user.username,
     )
+    if payload.correios_contract_id is not None:
+        contrato = contrato_da_loja_ou_400(db, user.licensee_id, payload.correios_contract_id)
+    else:
+        contrato = criar_contrato(db, user.licensee_id, payload.correios_credential, user.username)
+    client.correios_contract_id = contrato.id
     db.add(client)
     try:
-        db.flush()
-        db.add(
-            ClientContractCredential(
-                client_id=client.id,
-                correios_username=payload.correios_credential.correios_username,
-                access_code_encrypted=encrypt(payload.correios_credential.access_code),
-                postal_card=payload.correios_credential.postal_card,
-                contract_number=payload.correios_credential.contract_number,
-                dr=payload.correios_credential.dr,
-                created_by=user.username,
-            )
-        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -81,7 +74,8 @@ def create_client(
         after={
             "legal_name": client.legal_name,
             "tax_id": client.tax_id,
-            "correios_contract_saved": True,
+            "correios_contract_id": contrato.id,
+            "contrato_novo": payload.correios_credential is not None,
             "convite_emailed": emailed,
         },
         origin="Agência",
@@ -140,6 +134,38 @@ def deactivate_client(
         role=user.role,
         action="DESATIVAR_CLIENTE",
         entity=f"client:{client.id}",
+        origin="Agência",
+        ip_address=client_ip(request),
+    )
+    return client
+
+
+@router.put("/{client_id}/correios-contract", response_model=ClientOut)
+def change_client_contract(
+    client_id: int,
+    payload: ClientContractChange,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: LicenseeUser = Depends(require_licensee_role("Administrador")),
+):
+    """Troca o contrato dos Correios usado pelo cliente (ex.: passou a vender
+    por um marketplace e usa o contrato dele)."""
+    client = db.query(Client).filter(Client.id == client_id, Client.licensee_id == user.licensee_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    contrato = contrato_da_loja_ou_400(db, user.licensee_id, payload.correios_contract_id)
+    antes = client.correios_contract_id
+    client.correios_contract_id = contrato.id
+    db.commit()
+    db.refresh(client)
+    log_action(
+        db,
+        username=user.username,
+        role=user.role,
+        action="TROCAR_CONTRATO_CLIENTE",
+        entity=f"client:{client.id}",
+        before={"correios_contract_id": antes},
+        after={"correios_contract_id": contrato.id},
         origin="Agência",
         ip_address=client_ip(request),
     )

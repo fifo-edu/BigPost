@@ -401,6 +401,10 @@ class Client(Base):
     webhook_url: Mapped[str | None] = mapped_column(String(500))
     webhook_secret: Mapped[str | None] = mapped_column(String(120))
 
+    # Contrato dos Correios usado pelo cliente para gerar as pré-postagens.
+    # Vários clientes podem usar o mesmo contrato (marketplace).
+    correios_contract_id: Mapped[int | None] = mapped_column(ForeignKey("correios_contracts.id"))
+
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
@@ -413,13 +417,20 @@ class Client(Base):
     )
 
 
-class ClientContractCredential(Base):
-    """Credenciais CWS dos Correios vinculadas ao contrato de cada cliente."""
+class CorreiosContract(Base):
+    """Contrato dos Correios (credencial CWS) usado pelos clientes de uma loja
+    para gerar pré-postagens. Normalmente cada cliente tem o seu, mas vários
+    clientes podem compartilhar o mesmo (marketplace) — por isso o contrato é
+    um cadastro da loja e o cliente só aponta para ele
+    (Client.correios_contract_id). O código de acesso fica criptografado e
+    nunca volta pela API. A autenticação no CWS é pelo cartão de postagem
+    (ver app/services/correios_cws.py), daí ele ser único por loja."""
 
-    __tablename__ = "client_contract_credentials"
+    __tablename__ = "correios_contracts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False, unique=True)
+    licensee_id: Mapped[int] = mapped_column(ForeignKey("licensees.id"), nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)  # nome para identificar (ex.: "Marketplace X")
     correios_username: Mapped[str] = mapped_column(String(120), nullable=False)
     access_code_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     postal_card: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -430,6 +441,8 @@ class ClientContractCredential(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
     created_by: Mapped[str | None] = mapped_column(String(80))
+
+    __table_args__ = (UniqueConstraint("licensee_id", "postal_card", name="uq_correios_contract_postal_card"),)
 
 
 # ---------------------------------------------------------------------------

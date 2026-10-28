@@ -32,7 +32,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.models import ClientContractCredential, ClientCorreiosCredential, Shipment
+from app.models.models import Client, ClientCorreiosCredential, CorreiosContract, Shipment
 from app.services.crypto import decrypt
 
 # Confirmado no Swagger autenticado do CWS (grupo "Token"):
@@ -149,9 +149,11 @@ def _autenticar_cartao_postagem(
 def get_valid_token(
     db: Session, licensee_id: int, *, client_id: int | None = None, force_refresh: bool = False
 ) -> str:
-    """Retorna um token CWS válido, usando o contrato do cliente quando
-    `client_id` for informado e a credencial legada da agência caso contrário.
-    Reaproveita o cache até o token se aproximar da expiração.
+    """Retorna um token CWS válido, usando o contrato dos Correios do cliente
+    quando `client_id` for informado e a credencial legada da agência caso
+    contrário. O cache é por contrato: clientes que compartilham o mesmo
+    contrato (marketplace) usam o mesmo token. Reaproveita o cache até o token
+    se aproximar da expiração.
 
     Levanta CorreiosCWSError se:
       - não houver credencial cadastrada/ativa para o cliente ou licenciado;
@@ -159,23 +161,26 @@ def get_valid_token(
       - os Correios recusarem a autenticação (credencial errada, DR errado,
         cartão de postagem vencido/inválido, etc.).
     """
-    cache_key = ("client", client_id) if client_id is not None else ("licensee", licensee_id)
+    if client_id is not None:
+        client = db.get(Client, client_id)
+        cred = db.get(CorreiosContract, client.correios_contract_id) if client and client.correios_contract_id else None
+        access_code_encrypted = cred.access_code_encrypted if cred else None
+        owner = "contrato do cliente"
+        cache_key = ("contract", cred.id if cred else 0)
+    else:
+        cred = db.query(ClientCorreiosCredential).filter(ClientCorreiosCredential.licensee_id == licensee_id).first()
+        access_code_encrypted = cred.token_encrypted if cred else None
+        owner = "licenciado"
+        cache_key = ("licensee", licensee_id)
+    if not cred or not cred.active:
+        raise CorreiosCWSError(f"Nenhuma credencial CWS ativa cadastrada para este {owner}.")
+
     if not force_refresh:
         with _cache_lock:
             cached = _token_cache.get(cache_key)
         if cached and datetime.utcnow() < cached.expires_at - TOKEN_REFRESH_MARGIN:
             return cached.token
 
-    if client_id is not None:
-        cred = db.query(ClientContractCredential).filter(ClientContractCredential.client_id == client_id).first()
-        access_code_encrypted = cred.access_code_encrypted if cred else None
-        owner = "cliente"
-    else:
-        cred = db.query(ClientCorreiosCredential).filter(ClientCorreiosCredential.licensee_id == licensee_id).first()
-        access_code_encrypted = cred.token_encrypted if cred else None
-        owner = "licenciado"
-    if not cred or not cred.active:
-        raise CorreiosCWSError(f"Nenhuma credencial CWS ativa cadastrada para este {owner}.")
     if not access_code_encrypted:
         raise CorreiosCWSError(
             f"Credencial CWS do {owner} cadastrada sem código de acesso."
@@ -203,6 +208,13 @@ def get_valid_token(
     db.commit()
 
     return cached_token.token
+
+
+def invalidar_token_contrato(contract_id: int) -> None:
+    """Descarta o token em cache de um contrato — chamar depois de editar o
+    contrato (cartão, usuário ou código de acesso podem ter mudado)."""
+    with _cache_lock:
+        _token_cache.pop(("contract", contract_id), None)
 
 
 def criar_pre_postagem(db: Session, licensee_id: int, shipment: Shipment) -> dict:

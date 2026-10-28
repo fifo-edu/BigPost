@@ -20,6 +20,7 @@ from app.api import (
     client_correios,
     clients,
     correios,
+    correios_contracts,
     dashboard,
     integrations_painel_master,
     licensee_users,
@@ -136,6 +137,7 @@ app.include_router(integrations_painel_master.router)
 app.include_router(auth_agencia.router)
 app.include_router(auth_support.router)
 app.include_router(clients.router)
+app.include_router(correios_contracts.router)
 app.include_router(agencia_equipe.router)
 app.include_router(shipments_agencia.router)
 

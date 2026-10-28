@@ -121,7 +121,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
         <p class="notice">A agência postadora é a AGF por onde as lojas postam. O MCU e o login do Correios Atende ficam com ela; a senha é guardada criptografada e nunca é exibida de volta.</p>
         <input type="hidden" id="agId">
         <div class="grid">
-          <div class="field"><label>CNPJ *</label><input id="agTax"></div>
+          <div class="field"><label>CNPJ *</label><input id="agTax" placeholder="00.000.000/0000-00"></div>
           <div class="field"><label>Razão Social *</label><input id="agLegal"></div>
           <div class="field"><label>Nome Fantasia</label><input id="agTrade"></div>
         </div>
@@ -138,7 +138,7 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
         <div class="grid">
           <div class="field"><label>Contato</label><input id="agContactName"></div>
           <div class="field"><label>E-mail</label><input id="agContactEmail" type="email"></div>
-          <div class="field"><label>Telefone</label><input id="agContactPhone"></div>
+          <div class="field"><label>Telefone</label><input id="agContactPhone" placeholder="(11) 2345-6789"></div>
         </div>
         <h3>Correios Atende</h3>
         <div class="grid">
@@ -204,16 +204,22 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
         </div>
         <div class="field"><label>E-mail (login do cliente) *</label><input id="cliCadEmail" type="email"></div>
         <h3>Contrato dos Correios do cliente (CWS)</h3>
-        <p class="notice">Estes dados são exclusivos deste cliente. O código de acesso será armazenado criptografado. Esta credencial CWS é diferente do login Correios Atende da agência.</p>
-        <div class="grid g2">
-          <div class="field"><label>Usuário CWS *</label><input id="cliCadCorreiosUser" required></div>
-          <div class="field"><label>Código de acesso CWS *</label><input id="cliCadCorreiosAccess" type="password" required></div>
+        <p class="notice">Cada cliente posta pelo seu contrato. Num marketplace, vários clientes podem usar o mesmo contrato: escolha-o na lista em vez de cadastrar de novo. O código de acesso é guardado criptografado. Não é o login Correios Atende da agência.</p>
+        <div class="field"><label>Contrato *</label><select id="cliCadContractSel"></select></div>
+        <div id="cliCadNewContract">
+          <div class="grid g2">
+            <div class="field"><label>Nome do contrato (para reconhecer na lista)</label><input id="cliCadCorreiosLabel" placeholder="ex.: Contrato próprio, Marketplace X"></div>
+            <div class="field"><label>Usuário CWS *</label><input id="cliCadCorreiosUser"></div>
+          </div>
+          <div class="grid g2">
+            <div class="field"><label>Código de acesso CWS *</label><input id="cliCadCorreiosAccess" type="password" autocomplete="new-password"></div>
+            <div class="field"><label>Cartão de postagem * (só números)</label><input id="cliCadCorreiosCard" inputmode="numeric" maxlength="20"></div>
+          </div>
+          <div class="grid g2">
+            <div class="field"><label>Número do contrato * (só números)</label><input id="cliCadCorreiosContract" inputmode="numeric" maxlength="20"></div>
+            <div class="field"><label>Diretoria Regional (DR) *</label><input id="cliCadCorreiosDr" type="number" min="1" value="74"></div>
+          </div>
         </div>
-        <div class="grid g2">
-          <div class="field"><label>Cartão de postagem *</label><input id="cliCadCorreiosCard" required></div>
-          <div class="field"><label>Número do contrato *</label><input id="cliCadCorreiosContract" required></div>
-        </div>
-        <div class="field" style="max-width:160px"><label>Diretoria Regional (DR) *</label><input id="cliCadCorreiosDr" type="number" min="1" value="74" required></div>
         <br><button id="saveCliCadastro" class="action">Cadastrar cliente</button>
         <p id="cliCadMsg" style="color:#a53030"></p>
       </div>
@@ -409,6 +415,7 @@ function render() {
   $('chgL').innerHTML = licOpts;
   $('cliRelLicensee').innerHTML = '<option value="">Todas</option>' + licOpts;
   $('cliCadLicensee').innerHTML = licOpts;
+  loadCliCadContracts();
   renderCliRelatorios();
 
   renderAgencies();
@@ -424,7 +431,7 @@ function render() {
     $('bbAgreement').value = bc.agreement || ''; $('bbWallet').value = bc.wallet || '';
     $('bbAgency').value = bc.agency || ''; $('bbAccount').value = bc.account_no || '';
     $('bbDigit').value = bc.account_digit || ''; $('bbLayout').value = bc.cnab_layout || 'A DEFINIR';
-    $('bbBeneficiary').value = bc.beneficiary_name || ''; $('bbBeneficiaryTax').value = maskCNPJ(bc.beneficiary_tax_id || '');
+    $('bbBeneficiary').value = bc.beneficiary_name || ''; $('bbBeneficiaryTax').value = maskCpfCnpj(bc.beneficiary_tax_id || '');
   }
 
   $('remTable').innerHTML = (S.remittances || []).map(x => `<tr><td>${esc(x.file_name)}</td><td>${esc(x.reference_month)}</td><td>${x.total_titles}</td><td>${formatBRL(x.total_amount)}</td><td>${esc(x.status)}</td></tr>`).join('');
@@ -495,7 +502,8 @@ $('cliRelSearch').addEventListener('input', renderCliRelatorios);
 // Mesmos padrões brasileiros usados no resto do Admin: CEP com autopreenchimento
 // via ViaCEP, campo único CPF/CNPJ e telefone fixo/celular em campos separados,
 // os dois opcionais (br-utils.js).
-liveMask($('cliCadTax'), maskCpfCnpj);
+attachDocField($('cliCadTax'));
+liveMask($('cliCadState'), maskUF);
 liveMask($('cliCadPhoneFixo'), maskPhoneFixo);
 liveMask($('cliCadPhoneCelular'), maskPhoneCelular);
 attachCepAutofill('cliCadZip', {
@@ -505,12 +513,29 @@ attachCepAutofill('cliCadZip', {
 function clearCliCadastroForm() {
   ['cliCadTax', 'cliCadLegal', 'cliCadTrade', 'cliCadZip', 'cliCadStreet', 'cliCadNumber',
     'cliCadComplement', 'cliCadDistrict', 'cliCadCity', 'cliCadState', 'cliCadContactName',
-    'cliCadPhoneFixo', 'cliCadPhoneCelular', 'cliCadEmail', 'cliCadCorreiosUser',
+    'cliCadPhoneFixo', 'cliCadPhoneCelular', 'cliCadEmail', 'cliCadCorreiosLabel', 'cliCadCorreiosUser',
     'cliCadCorreiosAccess', 'cliCadCorreiosCard', 'cliCadCorreiosContract'].forEach(id => { $(id).value = ''; });
   $('cliCadPersonType').selectedIndex = 0;
   $('cliCadCorreiosDr').value = '74';
   $('cliCadMsg').textContent = '';
+  loadCliCadContracts();
 }
+
+// Contratos dos Correios da loja escolhida (marketplace: vários clientes no mesmo contrato).
+async function loadCliCadContracts() {
+  let lista = [];
+  const lid = $('cliCadLicensee').value;
+  if (lid) { try { lista = await api(`/api/v1/clients/correios-contracts?licensee_id=${lid}`); } catch (e) {} }
+  $('cliCadContractSel').innerHTML = '<option value="">Cadastrar um contrato novo…</option>' +
+    lista.filter(k => k.active).map(k => `<option value="${k.id}">${esc(k.label)} — cartão ${esc(k.postal_card)} (${k.clients_count} cliente${k.clients_count === 1 ? '' : 's'})</option>`).join('');
+  toggleCliCadNewContract();
+}
+function toggleCliCadNewContract() {
+  $('cliCadNewContract').classList.toggle('hidden', $('cliCadContractSel').value !== '');
+}
+$('cliCadLicensee').addEventListener('change', loadCliCadContracts);
+$('cliCadContractSel').addEventListener('change', toggleCliCadNewContract);
+['cliCadCorreiosCard', 'cliCadCorreiosContract'].forEach(id => liveMask($(id), v => onlyDigits(v)));
 
 $('saveCliCadastro').onclick = async () => {
   $('cliCadMsg').textContent = '';
@@ -520,7 +545,7 @@ $('saveCliCadastro').onclick = async () => {
       body: JSON.stringify({
         licensee_id: +$('cliCadLicensee').value,
         person_type: $('cliCadPersonType').value,
-        legal_name: $('cliCadLegal').value, trade_name: $('cliCadTrade').value || null, tax_id: onlyDigits($('cliCadTax').value),
+        legal_name: $('cliCadLegal').value, trade_name: $('cliCadTrade').value || null, tax_id: normCpfCnpj($('cliCadTax').value),
         zip_code: onlyDigits($('cliCadZip').value) || null,
         address_street: $('cliCadStreet').value || null, address_number: $('cliCadNumber').value || null,
         address_complement: $('cliCadComplement').value || null, address_district: $('cliCadDistrict').value || null,
@@ -529,13 +554,16 @@ $('saveCliCadastro').onclick = async () => {
         contact_phone: onlyDigits($('cliCadPhoneFixo').value) || null,
         contact_phone_mobile: onlyDigits($('cliCadPhoneCelular').value) || null,
         contact_email: $('cliCadEmail').value,
-        correios_credential: {
-          correios_username: $('cliCadCorreiosUser').value,
-          access_code: $('cliCadCorreiosAccess').value,
-          postal_card: $('cliCadCorreiosCard').value,
-          contract_number: $('cliCadCorreiosContract').value,
-          dr: parseInt($('cliCadCorreiosDr').value, 10),
-        },
+        ...($('cliCadContractSel').value
+          ? { correios_contract_id: +$('cliCadContractSel').value }
+          : { correios_credential: {
+              label: $('cliCadCorreiosLabel').value.trim() || null,
+              correios_username: $('cliCadCorreiosUser').value,
+              access_code: $('cliCadCorreiosAccess').value,
+              postal_card: $('cliCadCorreiosCard').value,
+              contract_number: $('cliCadCorreiosContract').value,
+              dr: parseInt($('cliCadCorreiosDr').value, 10),
+            } }),
       })
     });
     clearCliCadastroForm();
@@ -592,7 +620,12 @@ const AG_FIELDS = {
   agState: 'state', agContactName: 'contact_name', agContactEmail: 'contact_email', agContactPhone: 'contact_phone',
   agMcu: 'mcu', agUser: 'correios_username',
 };
-const AG_DIGITS = new Set(['tax_id', 'zip_code', 'contact_phone', 'mcu']);
+const AG_DIGITS = new Set(['zip_code', 'contact_phone', 'mcu']);
+attachDocField($('agTax'), 'cnpj');
+attachCepAutofill('agZip', { street: 'agStreet', district: 'agDistrict', city: 'agCity', state: 'agState' });
+liveMask($('agContactPhone'), maskPhoneGeneric);
+liveMask($('agState'), maskUF);
+liveMask($('agMcu'), v => onlyDigits(v));
 const storeName = l => l.trade_name || l.legal_name;
 
 function renderAgencies() {
@@ -626,7 +659,9 @@ window.editAgency = (id) => {
   clearAgencyForm();
   $('agId').value = a.id;
   Object.entries(AG_FIELDS).forEach(([el, f]) => $(el).value = a[f] || '');
-  $('agTax').value = maskCpfCnpj(a.tax_id);
+  $('agTax').value = maskCNPJ(a.tax_id);
+  $('agZip').value = maskCEP(a.zip_code || '');
+  $('agContactPhone').value = maskPhoneGeneric(a.contact_phone || '');
   $('agActive').checked = a.active;
   $('agFormTitle').textContent = 'Editar agência postadora — ' + (a.trade_name || a.legal_name);
   $('agPassHint').textContent = a.has_correios_password ? 'Senha já cadastrada. Deixe em branco para manter a atual.' : 'Nenhuma senha cadastrada ainda.';
@@ -640,7 +675,7 @@ $('agSave').onclick = async () => {
   const body = { active: $('agActive').checked, correios_password: $('agPass').value || null };
   Object.entries(AG_FIELDS).forEach(([el, f]) => {
     const v = $(el).value.trim();
-    body[f] = AG_DIGITS.has(f) ? (onlyDigits(v) || null) : (v || null);
+    body[f] = f === 'tax_id' ? normCpfCnpj(v) : AG_DIGITS.has(f) ? (onlyDigits(v) || null) : (v || null);
   });
   if (body.state) body.state = body.state.toUpperCase();
   try {
@@ -703,7 +738,7 @@ $('saveBBConfig').onclick = async () => {
   try {
     await api('/api/v1/bank/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       agreement: $('bbAgreement').value, wallet: $('bbWallet').value, agency: $('bbAgency').value, account_no: $('bbAccount').value,
-      account_digit: $('bbDigit').value, cnab_layout: $('bbLayout').value, beneficiary_name: $('bbBeneficiary').value, beneficiary_tax_id: onlyDigits($('bbBeneficiaryTax').value),
+      account_digit: $('bbDigit').value, cnab_layout: $('bbLayout').value, beneficiary_name: $('bbBeneficiary').value, beneficiary_tax_id: normCpfCnpj($('bbBeneficiaryTax').value) || null,
     }) });
     await loadAll(); alert('Configuração salva.');
   } catch (e) { alert(e.message); }
@@ -726,7 +761,7 @@ async function reconcile(entryId, chargeId) {
 }
 async function payCharge(id) { await api(`/api/v1/charges/${id}/pay`, { method: 'POST' }); await loadAll(); }
 
-liveMask($('bbBeneficiaryTax'), maskCNPJ);
+attachDocField($('bbBeneficiaryTax'));
 
 // --------------------------- Usuários (internos) ---------------------------
 $('saveUser').onclick = async () => {

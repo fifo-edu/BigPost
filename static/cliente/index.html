@@ -304,7 +304,8 @@ $('supportCancel').onclick = async () => {
   $('supportToggle').textContent = 'Sou da equipe BigPost (suporte)';
 };
 
-liveMask($('rTax'), maskCpfCnpj);
+attachDocField($('rTax'));
+liveMask($('rState'), maskUF);
 liveMask($('rPhone'), maskPhoneGeneric);
 attachCepAutofill('rZip', { street: 'rStreet', district: 'rDistrict', city: 'rCity', state: 'rState' });
 
@@ -313,7 +314,7 @@ S.recreatingId = null;
 function shipmentPayload() {
   return {
     external_reference: $('pRef').value || null,
-    recipient_name: $('rName').value, recipient_tax_id: onlyDigits($('rTax').value) || null,
+    recipient_name: $('rName').value, recipient_tax_id: normCpfCnpj($('rTax').value) || null,
     recipient_phone: onlyDigits($('rPhone').value) || null, recipient_email: $('rEmail').value || null,
     recipient_zip: onlyDigits($('rZip').value),
     recipient_street: $('rStreet').value || null, recipient_number: $('rNumber').value || null,

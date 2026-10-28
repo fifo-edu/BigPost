@@ -11,6 +11,10 @@ Módulo operacional de criação, emissão e gerenciamento de postagens via Corr
 
 FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Sem dependências externas de autenticação/criptografia além do pacote `cryptography` — hash de senha (PBKDF2), sessão (JWT HS256 caseiro) e assinatura de licença (Ed25519) são implementados só com biblioteca padrão do Python, então não há `passlib`/`pyjwt` para instalar.
 
+## Padrões brasileiros de cadastro
+
+CPF, CNPJ, CEP, UF e telefones são conferidos no servidor (`app/core/br.py`) e gravados sem máscara: CPF/CNPJ com dígito verificador, **inclusive o CNPJ alfanumérico** emitido desde julho de 2026 (letras nas 12 primeiras posições, gravado em maiúsculas); CEP com 8 dígitos; UF entre as 27; telefone com DDD válido, fixo com 8 dígitos (começa com 2 a 5) e celular com 9 (começa com 9). Endereço sempre em campos separados (CEP, logradouro, número, complemento, bairro, cidade, UF). Nas telas, `static/br-utils.js` aplica as máscaras, preenche o endereço pelo CEP e avisa quando o CPF/CNPJ não confere (use `normCpfCnpj`, não `onlyDigits`, para documentos — `onlyDigits` apagaria as letras do CNPJ alfanumérico).
+
 ## Modelo de dados — visão geral
 
 - `users` — equipe interna do BigPost (papéis: Master, Supervisor, Operador).
@@ -20,6 +24,7 @@ FastAPI + SQLAlchemy 2.0 + Alembic + PostgreSQL. Sem dependências externas de a
 - `client_contract_credentials` — usuário, código de acesso CWS (criptografado), cartão de postagem, contrato e DR próprios de cada cliente final; cadastrados pela agência no portal Agência junto ao cadastro do cliente. Não confundir com o login Correios Atende da agência.
 - `licensee_users` — equipe de uma agência, compartilhada pelos portais Agência e Operador. Hierarquia de 5 papéis: **Master > Administrador > Financeiro > {Operador de Caixa, Expedição}** (esses dois últimos em pé de igualdade — um não manda no outro); os 3 primeiros usam o portal Agência, os 2 últimos o portal Operador. Login próprio, cookie `session_agencia`.
 - `clients` — clientes de uma agência (módulo Cliente): quem emite etiqueta com ela. Cadastro detalhado (endereço, contato) + login próprio (usuário/senha, cookie `session_cliente`) + **API key** (`bp_live_...`) para integração programática.
+- `correios_contracts` — contratos dos Correios (credencial CWS: usuário, código de acesso criptografado, cartão de postagem, nº do contrato, DR) cadastrados pela loja. Cada cliente aponta para um (`clients.correios_contract_id`); vários clientes podem compartilhar o mesmo (marketplace), e o token do CWS é por contrato. Substitui a antiga `client_contract_credentials` (uma credencial por cliente).
 - `shipments` — encomendas/etiquetas: dados do destinatário e do pacote (declarados pelo cliente na emissão), depois peso/preço confirmados e código de rastreio (preenchidos pela agência). Status: `Pendente → Aferido → Postado → Em Trânsito → Entregue` (ou `Devolvido`/`Cancelado`).
 - `shipment_events` — histórico/rastreio de cada encomenda.
 - `webhook_deliveries` — log de entrega de webhook ao cliente (auditoria/retry).

@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import client_ip
 from app.core.db import get_db
 from app.core.security import UNUSABLE_PASSWORD_HASH, require_role
-from app.models.models import Client, ClientContractCredential, Licensee, User
-from app.schemas.schemas import ClientAdminCreate, ClientAdminOut, ClientCreateOut, ClientOut
+from app.api.correios_contracts import contratos_da_loja, contrato_da_loja_ou_400, criar_contrato
+from app.models.models import Client, Licensee, User
+from app.schemas.schemas import ClientAdminCreate, ClientAdminOut, ClientCreateOut, ClientOut, CorreiosContractOut
 from app.services.audit import log_action
-from app.services.crypto import encrypt
 from app.services.password_tokens import issue_and_notify
 from app.services.support_access import SUPPORT_USERNAME
 
@@ -44,6 +44,17 @@ def list_clients_admin(
     return out
 
 
+@router.get("/correios-contracts", response_model=list[CorreiosContractOut])
+def list_contracts_admin(
+    licensee_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("Supervisor")),
+):
+    """Contratos dos Correios de uma loja, para escolher no cadastro de
+    cliente pelo Admin (ex.: cliente novo de um marketplace já cadastrado)."""
+    return contratos_da_loja(db, licensee_id)
+
+
 @router.post("", response_model=ClientCreateOut)
 def create_client_admin(
     payload: ClientAdminCreate,
@@ -67,27 +78,20 @@ def create_client_admin(
 
     email = payload.contact_email.strip().lower()
     client = Client(
-        **payload.model_dump(exclude={"contact_email", "licensee_id", "correios_credential"}),
+        **payload.model_dump(exclude={"contact_email", "licensee_id", "correios_credential", "correios_contract_id"}),
         licensee_id=payload.licensee_id,
         contact_email=email,
         username=email,
         password_hash=UNUSABLE_PASSWORD_HASH,
         created_by=user.username,
     )
+    if payload.correios_contract_id is not None:
+        contrato = contrato_da_loja_ou_400(db, licensee.id, payload.correios_contract_id)
+    else:
+        contrato = criar_contrato(db, licensee.id, payload.correios_credential, user.username)
+    client.correios_contract_id = contrato.id
     db.add(client)
     try:
-        db.flush()
-        db.add(
-            ClientContractCredential(
-                client_id=client.id,
-                correios_username=payload.correios_credential.correios_username,
-                access_code_encrypted=encrypt(payload.correios_credential.access_code),
-                postal_card=payload.correios_credential.postal_card,
-                contract_number=payload.correios_credential.contract_number,
-                dr=payload.correios_credential.dr,
-                created_by=user.username,
-            )
-        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -106,7 +110,8 @@ def create_client_admin(
             "legal_name": client.legal_name,
             "tax_id": client.tax_id,
             "licensee_id": licensee.id,
-            "correios_contract_saved": True,
+            "correios_contract_id": contrato.id,
+            "contrato_novo": payload.correios_credential is not None,
             "convite_emailed": emailed,
         },
         origin="Admin",

@@ -124,24 +124,59 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:
         </div>
         <p class="notice">Cadastro é feito só por e-mail — o cliente recebe um convite para definir a própria senha.</p>
         <h3>Contrato dos Correios do cliente (CWS)</h3>
-        <p class="notice">Informe o contrato usado por este cliente. O código de acesso será armazenado criptografado. Não é o login Correios Atende da agência.</p>
-        <div class="grid g2">
-          <div class="field"><label>Usuário CWS *</label><input id="cCorreiosUser" required></div>
-          <div class="field"><label>Código de acesso CWS *</label><input id="cCorreiosAccess" type="password" required></div>
+        <p class="notice">Cada cliente posta pelo seu contrato. Num marketplace, vários clientes podem usar o mesmo contrato: escolha-o na lista em vez de cadastrar de novo. Não é o login Correios Atende da agência.</p>
+        <div class="field"><label>Contrato *</label><select id="cContractSel"></select></div>
+        <div id="cNewContract">
+          <div class="grid g2">
+            <div class="field"><label>Nome do contrato (para reconhecer na lista)</label><input id="cCorreiosLabel" placeholder="ex.: Contrato próprio, Marketplace X"></div>
+            <div class="field"><label>Usuário CWS *</label><input id="cCorreiosUser"></div>
+          </div>
+          <div class="grid g2">
+            <div class="field"><label>Código de acesso CWS *</label><input id="cCorreiosAccess" type="password" autocomplete="new-password"></div>
+            <div class="field"><label>Cartão de postagem * (só números)</label><input id="cCorreiosCard" inputmode="numeric" maxlength="20"></div>
+          </div>
+          <div class="grid g2">
+            <div class="field"><label>Número do contrato * (só números)</label><input id="cCorreiosContract" inputmode="numeric" maxlength="20"></div>
+            <div class="field"><label>Diretoria Regional (DR) *</label><input id="cCorreiosDr" type="number" min="1" value="74"></div>
+          </div>
+          <p class="notice">O código de acesso é guardado criptografado e não aparece de novo.</p>
         </div>
-        <div class="grid g2">
-          <div class="field"><label>Cartão de postagem *</label><input id="cCorreiosCard" required></div>
-          <div class="field"><label>Número do contrato *</label><input id="cCorreiosContract" required></div>
-        </div>
-        <div class="field" style="max-width:160px"><label>Diretoria Regional (DR) *</label><input id="cCorreiosDr" type="number" min="1" value="74" required></div>
         <br><button id="saveClient" class="action">Cadastrar cliente</button>
       </div>
       <br>
       <div class="card scroll">
         <table>
-          <thead><tr><th>Cliente</th><th>CNPJ/CPF</th><th>Usuário</th><th>Status</th><th>Ação</th></tr></thead>
+          <thead><tr><th>Cliente</th><th>CNPJ/CPF</th><th>Usuário</th><th>Contrato dos Correios</th><th>Status</th><th>Ação</th></tr></thead>
           <tbody id="clientsTable"></tbody>
         </table>
+      </div>
+      <br>
+      <div class="card scroll" id="contractsCard">
+        <h3>Contratos dos Correios</h3>
+        <p class="notice">Alterar um contrato vale para todos os clientes que usam ele.</p>
+        <table>
+          <thead><tr><th>Contrato</th><th>Usuário CWS</th><th>Cartão</th><th>Nº contrato</th><th>DR</th><th>Clientes</th><th>Status</th><th></th></tr></thead>
+          <tbody id="contractsTable"></tbody>
+        </table>
+        <div id="contractEdit" class="hidden">
+          <h3 id="ctEditTitle">Editar contrato</h3>
+          <div class="grid g2">
+            <div class="field"><label>Nome do contrato</label><input id="ctLabel"></div>
+            <div class="field"><label>Usuário CWS *</label><input id="ctUser"></div>
+          </div>
+          <div class="grid g2">
+            <div class="field"><label>Código de acesso CWS (vazio = manter o atual)</label><input id="ctAccess" type="password" autocomplete="new-password"></div>
+            <div class="field"><label>Cartão de postagem * (só números)</label><input id="ctCard" inputmode="numeric" maxlength="20"></div>
+          </div>
+          <div class="grid g2">
+            <div class="field"><label>Número do contrato * (só números)</label><input id="ctContract" inputmode="numeric" maxlength="20"></div>
+            <div class="field"><label>Diretoria Regional (DR) *</label><input id="ctDr" type="number" min="1"></div>
+          </div>
+          <div class="field"><label><input type="checkbox" id="ctActive"> Ativo</label></div>
+          <br>
+          <button class="action" id="ctSave">Salvar contrato</button>
+          <button class="action secondary" onclick="$('contractEdit').classList.add('hidden')">Cancelar</button>
+        </div>
       </div>
     </section>
 
@@ -297,18 +332,22 @@ $('supportCancel').onclick = async () => {
 };
 
 async function loadClients() {
+  await loadContracts();
   const rows = await api('/api/v1/agencia/clients');
   S.clients = rows;
+  const nomeContrato = id => { const k = (S.contracts || []).find(x => x.id === id); return k ? k.label : (id ? '—' : 'não definido'); };
   $('clientsTable').innerHTML = rows.map(c => `<tr>
     <td>${esc(c.trade_name || c.legal_name)}</td>
     <td>${esc(maskCpfCnpj(c.tax_id))}</td>
     <td>${esc(c.username)}</td>
+    <td>${esc(nomeContrato(c.correios_contract_id))}</td>
     <td>${c.active ? 'Ativo' : 'Inativo'}</td>
     <td>
       <button class="action secondary" onclick="resetClientPassword(${c.id})">Zerar senha</button>
+      ${(S.contracts || []).length ? `<button class="action secondary" onclick="trocarContrato(${c.id})">Trocar contrato</button>` : ''}
       ${c.active ? `<button class="action secondary" onclick="deactivateClient(${c.id})">Desativar</button>` : ''}
     </td>
-  </tr>`).join('') || '<tr><td colspan="5" class="notice">Nenhum cliente cadastrado ainda.</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="6" class="notice">Nenhum cliente cadastrado ainda.</td></tr>';
 }
 
 window.resetClientPassword = async (id) => {
@@ -325,7 +364,9 @@ window.deactivateClient = async (id) => {
   catch (e) { alert(e.message); }
 };
 
-liveMask($('cTax'), maskCpfCnpj);
+attachDocField($('cTax'));
+liveMask($('cState'), maskUF);
+['cCorreiosCard', 'cCorreiosContract', 'ctCard', 'ctContract'].forEach(id => liveMask($(id), v => onlyDigits(v)));
 liveMask($('cPhoneFixo'), maskPhoneFixo);
 liveMask($('cPhoneCelular'), maskPhoneCelular);
 attachCepAutofill('cZip', { street: 'cStreet', district: 'cDistrict', city: 'cCity', state: 'cState' });
@@ -333,13 +374,15 @@ attachCepAutofill('cZip', { street: 'cStreet', district: 'cDistrict', city: 'cCi
 const NEW_CLIENT_FIELD_IDS = [
   'cLegal', 'cTrade', 'cTax', 'cZip', 'cStreet', 'cNumber', 'cComplement', 'cDistrict',
   'cCity', 'cState', 'cContactName', 'cContactEmail', 'cPhoneFixo', 'cPhoneCelular',
-  'cCorreiosUser', 'cCorreiosAccess', 'cCorreiosCard', 'cCorreiosContract',
+  'cCorreiosLabel', 'cCorreiosUser', 'cCorreiosAccess', 'cCorreiosCard', 'cCorreiosContract',
 ];
 
 function clearNewClientForm() {
   NEW_CLIENT_FIELD_IDS.forEach(id => { $(id).value = ''; });
   $('cPersonType').selectedIndex = 0;
   $('cCorreiosDr').value = '74';
+  $('cContractSel').value = '';
+  toggleNewContract();
 }
 
 $('saveClient').onclick = async () => {
@@ -348,7 +391,7 @@ $('saveClient').onclick = async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         person_type: $('cPersonType').value,
-        legal_name: $('cLegal').value, trade_name: $('cTrade').value || null, tax_id: onlyDigits($('cTax').value),
+        legal_name: $('cLegal').value, trade_name: $('cTrade').value || null, tax_id: normCpfCnpj($('cTax').value),
         zip_code: onlyDigits($('cZip').value) || null,
         address_street: $('cStreet').value || null, address_number: $('cNumber').value || null,
         address_complement: $('cComplement').value || null, address_district: $('cDistrict').value || null,
@@ -356,13 +399,7 @@ $('saveClient').onclick = async () => {
         contact_name: $('cContactName').value || null, contact_email: $('cContactEmail').value,
         contact_phone: onlyDigits($('cPhoneFixo').value) || null,
         contact_phone_mobile: onlyDigits($('cPhoneCelular').value) || null,
-        correios_credential: {
-          correios_username: $('cCorreiosUser').value,
-          access_code: $('cCorreiosAccess').value,
-          postal_card: $('cCorreiosCard').value,
-          contract_number: $('cCorreiosContract').value,
-          dr: parseInt($('cCorreiosDr').value, 10),
-        },
+        ...contratoDoFormulario(),
       })
     });
     clearNewClientForm();
@@ -423,6 +460,88 @@ window.teamAction = async (id, action) => {
       else alert('Não foi possível enviar o e-mail (SMTP não configurado) — copie e envie este link manualmente:\n\n' + out.link);
     }
     await loadTeam();
+  } catch (e) { alert(e.message); }
+};
+
+// --------------------------- Contratos dos Correios (compartilháveis) ---------------------------
+async function loadContracts() {
+  try { S.contracts = await api('/api/v1/agencia/correios-contracts'); }
+  catch (e) { S.contracts = []; }
+  const ativos = S.contracts.filter(k => k.active);
+  const atual = $('cContractSel').value;
+  $('cContractSel').innerHTML = '<option value="">Cadastrar um contrato novo…</option>' +
+    ativos.map(k => `<option value="${k.id}">${esc(k.label)} — cartão ${esc(k.postal_card)} (${k.clients_count} cliente${k.clients_count === 1 ? '' : 's'})</option>`).join('');
+  if ([...$('cContractSel').options].some(o => o.value === atual)) $('cContractSel').value = atual;
+  toggleNewContract();
+  $('contractsCard').classList.toggle('hidden', !S.contracts.length);
+  $('contractsTable').innerHTML = S.contracts.map(k => `<tr>
+    <td>${esc(k.label)}</td><td>${esc(k.correios_username)}</td><td>${esc(k.postal_card)}</td>
+    <td>${esc(k.contract_number)}</td><td>${k.dr}</td><td>${k.clients_count}</td>
+    <td>${k.active ? 'Ativo' : 'Inativo'}</td>
+    <td><button class="action secondary" onclick="editarContrato(${k.id})">Editar</button></td>
+  </tr>`).join('');
+}
+
+function toggleNewContract() {
+  $('cNewContract').classList.toggle('hidden', $('cContractSel').value !== '');
+}
+$('cContractSel').onchange = toggleNewContract;
+
+function contratoDoFormulario() {
+  const id = $('cContractSel').value;
+  if (id) return { correios_contract_id: +id };
+  return {
+    correios_credential: {
+      label: $('cCorreiosLabel').value.trim() || null,
+      correios_username: $('cCorreiosUser').value,
+      access_code: $('cCorreiosAccess').value,
+      postal_card: $('cCorreiosCard').value,
+      contract_number: $('cCorreiosContract').value,
+      dr: parseInt($('cCorreiosDr').value, 10),
+    },
+  };
+}
+
+let contratoEditando = null;
+window.editarContrato = (id) => {
+  const k = S.contracts.find(x => x.id === id);
+  if (!k) return;
+  contratoEditando = id;
+  $('ctEditTitle').textContent = 'Editar contrato — ' + k.label + (k.clients_count > 1 ? ` (usado por ${k.clients_count} clientes)` : '');
+  $('ctLabel').value = k.label; $('ctUser').value = k.correios_username; $('ctAccess').value = '';
+  $('ctCard').value = k.postal_card; $('ctContract').value = k.contract_number; $('ctDr').value = k.dr;
+  $('ctActive').checked = k.active;
+  $('contractEdit').classList.remove('hidden');
+  $('contractEdit').scrollIntoView({ behavior: 'smooth' });
+};
+$('ctSave').onclick = async () => {
+  try {
+    await api(`/api/v1/agencia/correios-contracts/${contratoEditando}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label: $('ctLabel').value.trim() || null, correios_username: $('ctUser').value,
+        access_code: $('ctAccess').value || null, postal_card: $('ctCard').value,
+        contract_number: $('ctContract').value, dr: parseInt($('ctDr').value, 10), active: $('ctActive').checked,
+      }),
+    });
+    $('contractEdit').classList.add('hidden');
+    await loadClients();
+  } catch (e) { alert(e.message); }
+};
+
+window.trocarContrato = async (clientId) => {
+  const c = S.clients.find(x => x.id === clientId) || {};
+  const ativos = S.contracts.filter(k => k.active);
+  const lista = ativos.map((k, i) => `${i + 1} - ${k.label} (cartão ${k.postal_card})`).join('\n');
+  const n = prompt(`Contrato dos Correios para ${c.trade_name || c.legal_name}:\n\n${lista}\n\nDigite o número da opção:`);
+  if (n === null) return;
+  const k = ativos[parseInt(n, 10) - 1];
+  if (!k) { alert('Opção inválida.'); return; }
+  try {
+    await api(`/api/v1/agencia/clients/${clientId}/correios-contract`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correios_contract_id: k.id }),
+    });
+    await loadClients();
   } catch (e) { alert(e.message); }
 };
 </script>

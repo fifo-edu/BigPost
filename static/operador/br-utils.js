@@ -23,8 +23,18 @@ function maskCPF(v) {
   return d;
 }
 
+/* CPF/CNPJ sem máscara, em maiúsculas. Use no lugar de onlyDigits para
+ * documentos: desde julho de 2026 a Receita emite CNPJ alfanumérico (letras
+ * nas 12 primeiras posições, ex.: 12.ABC.345/01DE-35), e onlyDigits apagaria
+ * as letras. */
+function normCpfCnpj(v) {
+  return (v || '').toString().toUpperCase().replace(/[^0-9A-Z]/g, '');
+}
+
 function maskCNPJ(v) {
-  const d = onlyDigits(v).slice(0, 14);
+  const n = normCpfCnpj(v);
+  // 12 primeiras posições podem ter letras; os 2 dígitos verificadores são números.
+  const d = (n.slice(0, 12) + n.slice(12).replace(/\D/g, '')).slice(0, 14);
   if (d.length > 12) return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12) + '-' + d.slice(12);
   if (d.length > 8) return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8);
   if (d.length > 5) return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5);
@@ -35,8 +45,56 @@ function maskCNPJ(v) {
 /* Campo único que aceita tanto CPF quanto CNPJ: decide o formato pela
  * quantidade de dígitos já digitados (>11 dígitos = CNPJ). */
 function maskCpfCnpj(v) {
+  const n = normCpfCnpj(v);
+  return n.length > 11 || /[A-Z]/.test(n) ? maskCNPJ(v) : maskCPF(v);
+}
+
+function _dvMod11(valores, pesos) {
+  const resto = valores.reduce((s, v, i) => s + v * pesos[i], 0) % 11;
+  return resto < 2 ? 0 : 11 - resto;
+}
+
+function cpfValido(v) {
   const d = onlyDigits(v);
-  return d.length > 11 ? maskCNPJ(v) : maskCPF(v);
+  if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+  const n = [...d].map(Number);
+  return n[9] === _dvMod11(n.slice(0, 9), [10, 9, 8, 7, 6, 5, 4, 3, 2])
+    && n[10] === _dvMod11(n.slice(0, 10), [11, 10, 9, 8, 7, 6, 5, 4, 3, 2]);
+}
+
+/* CNPJ numérico ou alfanumérico: cada caractere vale o código ASCII - 48. */
+function cnpjValido(v) {
+  const c = normCpfCnpj(v);
+  if (!/^[0-9A-Z]{12}[0-9]{2}$/.test(c) || /^(.)\1+$/.test(c)) return false;
+  const n = [...c].map(ch => ch.charCodeAt(0) - 48);
+  return n[12] === _dvMod11(n.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    && n[13] === _dvMod11(n.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+}
+
+function cpfCnpjValido(v) {
+  const n = normCpfCnpj(v);
+  return n.length === 11 && /^\d+$/.test(n) ? cpfValido(n) : cnpjValido(n);
+}
+
+/* Máscara + aviso ao sair do campo quando o CPF/CNPJ não confere (o
+ * servidor confere de novo ao salvar). tipo: 'cpf' | 'cnpj' | 'ambos'. */
+function attachDocField(input, tipo = 'ambos') {
+  if (!input) return;
+  const mask = tipo === 'cpf' ? maskCPF : tipo === 'cnpj' ? maskCNPJ : maskCpfCnpj;
+  const ok = tipo === 'cpf' ? cpfValido : tipo === 'cnpj' ? cnpjValido : cpfCnpjValido;
+  liveMask(input, mask);
+  const check = () => {
+    const vazio = !normCpfCnpj(input.value);
+    const valido = vazio || ok(input.value);
+    input.style.borderColor = valido ? '' : '#a53030';
+    input.title = valido ? '' : (tipo === 'cpf' ? 'CPF inválido' : tipo === 'cnpj' ? 'CNPJ inválido' : 'CPF/CNPJ inválido');
+  };
+  input.addEventListener('blur', check);
+  input.addEventListener('input', () => { if (input.style.borderColor) check(); });
+}
+
+function maskUF(v) {
+  return (v || '').toString().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
 }
 
 /* Telefone fixo e celular — campos separados (desde 2026-09-12, pedido do
@@ -87,13 +145,13 @@ function liveMask(input, maskFn) {
   input.addEventListener('input', () => {
     const before = input.value;
     const posBefore = input.selectionStart ?? before.length;
-    const digitsBefore = onlyDigits(before.slice(0, posBefore)).length;
+    const digitsBefore = normCpfCnpj(before.slice(0, posBefore)).length;
     const masked = maskFn(before);
     input.value = masked;
     if (document.activeElement === input) {
       let pos = 0, digitsSeen = 0;
       while (pos < masked.length && digitsSeen < digitsBefore) {
-        if (/\d/.test(masked[pos])) digitsSeen++;
+        if (/[0-9A-Za-z]/.test(masked[pos])) digitsSeen++;
         pos++;
       }
       try { input.setSelectionRange(pos, pos); } catch (e) {}

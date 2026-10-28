@@ -1,7 +1,9 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, model_validator
+
+from app.core import br
 
 
 # --------------------------- Auth ---------------------------
@@ -93,6 +95,18 @@ class LicenseeCreate(BaseModel):
     billing_day: int = 10
     notes: str | None = None
 
+    @model_validator(mode="after")
+    def _padrao_br(self):
+        if self.person_type not in ("PJ", "PF"):
+            raise ValueError("Tipo de pessoa inválido (PJ ou PF)")
+        return br.aplicar(self, {
+            "tax_id": ("CNPJ/CPF", lambda v: br.validar_documento(self.person_type, v)),
+            "zip_code": ("CEP", br.validar_cep),
+            "state": ("UF", br.validar_uf),
+            "contact_phone": ("Telefone do contato", br.telefone),
+            "billing_phone": ("Telefone do financeiro", br.telefone),
+        })
+
 
 class LicenseeStatusUpdate(BaseModel):
     status: str
@@ -100,6 +114,10 @@ class LicenseeStatusUpdate(BaseModel):
 
 class LicenseeOut(LicenseeCreate):
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _padrao_br(self):
+        return self  # saída: devolve o que está gravado, sem revalidar
     id: int
     status: str
     reported_active_users: int
@@ -145,7 +163,7 @@ class PainelMasterLicenseeUpsert(LicenseeCreate):
 
 
 class PainelMasterLicenseRequest(BaseModel):
-    tax_id: str
+    tax_id: Annotated[str, BeforeValidator(lambda v: br.normalizar_cnpj(v) if isinstance(v, str) else v)]
     product_code: str
     expires_at: str | None = None  # YYYY-MM-DD ou vazio = PERPETUA
     max_users: int | None = None
@@ -221,7 +239,7 @@ class BankConfigUpdate(BaseModel):
     account_digit: str | None = None
     cnab_layout: str | None = None
     beneficiary_name: str | None = None
-    beneficiary_tax_id: str | None = None
+    beneficiary_tax_id: br.CpfCnpj = None
 
 
 class BankImportRequest(BaseModel):
@@ -383,12 +401,45 @@ class SupportEnterRequest(BaseModel):
 
 
 # --------------------------- Clientes de cada agência ---------------------------
-class ClientContractCredentialCreate(BaseModel):
+class CorreiosContractCreate(BaseModel):
+    """Contrato dos Correios (credencial CWS) da loja. `label` é o nome para
+    reconhecer o contrato na lista (ex.: "Marketplace X"); se vier vazio, o
+    BigPost usa "Contrato <número>"."""
+
+    label: str | None = Field(default=None, max_length=120)
     correios_username: str = Field(min_length=1, max_length=120)
     access_code: str = Field(min_length=1)
-    postal_card: str = Field(min_length=1, max_length=20)
-    contract_number: str = Field(min_length=1, max_length=20)
-    dr: int = Field(gt=0)
+    postal_card: Annotated[br.SomenteDigitos, Field(min_length=1, max_length=20)]
+    contract_number: Annotated[br.SomenteDigitos, Field(min_length=1, max_length=20)]
+    dr: int = Field(gt=0, lt=100)
+
+
+class CorreiosContractUpdate(CorreiosContractCreate):
+    """Na edição, código de acesso vazio mantém o atual (a tela não reexibe)."""
+
+    access_code: str | None = None
+    active: bool = True
+
+
+class CorreiosContractOut(BaseModel):
+    """Nunca inclui o código de acesso — só se ele está cadastrado."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    licensee_id: int
+    label: str
+    correios_username: str
+    postal_card: str
+    contract_number: str
+    dr: int
+    active: bool
+    last_validated_at: datetime | None
+    clients_count: int = 0
+    updated_at: datetime
+
+
+class ClientContractChange(BaseModel):
+    correios_contract_id: int
 
 
 class ClientCreate(BaseModel):
@@ -414,7 +465,24 @@ class ClientCreate(BaseModel):
     contact_email: EmailStr
     contact_phone: str | None = None  # telefone fixo, opcional
     contact_phone_mobile: str | None = None  # telefone celular, opcional
-    correios_credential: ClientContractCredentialCreate
+    # Contrato dos Correios: escolher um já cadastrado na loja (ex.: o mesmo
+    # contrato de outro cliente, no caso de marketplace) OU cadastrar um novo.
+    correios_contract_id: int | None = None
+    correios_credential: CorreiosContractCreate | None = None
+
+    @model_validator(mode="after")
+    def _um_contrato(self):
+        if (self.correios_contract_id is None) == (self.correios_credential is None):
+            raise ValueError("Escolha um contrato dos Correios já cadastrado ou cadastre um novo (um dos dois)")
+        if self.person_type not in ("PJ", "PF"):
+            raise ValueError("Tipo de pessoa inválido (PJ ou PF)")
+        return br.aplicar(self, {
+            "tax_id": ("CNPJ/CPF", lambda v: br.validar_documento(self.person_type, v)),
+            "zip_code": ("CEP", br.validar_cep),
+            "state": ("UF", br.validar_uf),
+            "contact_phone": ("Telefone fixo", br.telefone_fixo),
+            "contact_phone_mobile": ("Celular", br.telefone_celular),
+        })
 
 
 class ClientOut(BaseModel):
@@ -437,6 +505,7 @@ class ClientOut(BaseModel):
     contact_phone: str | None
     contact_phone_mobile: str | None
     username: str
+    correios_contract_id: int | None = None
     api_key_prefix: str | None
     webhook_url: str | None
     active: bool
@@ -504,6 +573,15 @@ class ShipmentCreate(BaseModel):
     height_cm: float | None = None
     declared_value: float | None = None
     contents_description: str | None = None
+
+    @model_validator(mode="after")
+    def _padrao_br(self):
+        return br.aplicar(self, {
+            "recipient_zip": ("CEP do destinatário", br.cep_obrigatorio),
+            "recipient_state": ("UF do destinatário", br.validar_uf),
+            "recipient_tax_id": ("CPF/CNPJ do destinatário", br.validar_cpf_cnpj),
+            "recipient_phone": ("Telefone do destinatário", br.telefone),
+        })
 
 
 class ShipmentBulkCreate(BaseModel):
@@ -602,17 +680,17 @@ class PostingAgencyUpsert(BaseModel):
 
     legal_name: str = Field(min_length=1)
     trade_name: str | None = None
-    tax_id: str = Field(pattern=r"^[0-9]{14}$")
-    zip_code: str | None = None
+    tax_id: br.Cnpj
+    zip_code: br.Cep = None
     address_street: str | None = None
     address_number: str | None = None
     address_complement: str | None = None
     address_district: str | None = None
     city: str | None = None
-    state: str | None = Field(default=None, max_length=2)
+    state: br.Uf = None
     contact_name: str | None = None
     contact_email: EmailStr | None = None
-    contact_phone: str | None = None
+    contact_phone: br.Telefone = None
     mcu: str | None = Field(default=None, pattern=r"^[0-9]{8}$")
     correios_username: str | None = None
     correios_password: str | None = None
